@@ -106,7 +106,7 @@ def test_a_line_the_filer_does_not_tag_is_named_unavailable():
 @pytest.mark.unit
 def test_the_report_states_the_vintage_rule():
     out = sec_edgar.get_balance_sheet("AAPL", "annual", "2024-11-15")
-    assert "filed on or before 2024-11-15" in out
+    assert "filed before 2024-11-15" in out
 
 
 @pytest.mark.unit

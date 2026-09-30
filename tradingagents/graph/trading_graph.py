@@ -2,19 +2,28 @@ import hashlib
 import json
 import logging
 import os
+from collections.abc import Mapping
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from langgraph.prebuilt import ToolNode
+
 import tradingagents
+from tradingagents.agents.analysts.sentiment_analyst import SourceFetcher, fetch_sentiment_sources
 from tradingagents.agents.context import build_instrument_context, resolve_instrument_identity
 from tradingagents.agents.rating import run_rating
 from tradingagents.dataflows.config import run_config, run_config_context, set_config
 from tradingagents.dataflows.date_window import get_current_date, is_historical
 from tradingagents.dataflows.symbols import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.llm_clients import create_tier_client, tier_provider
+from tradingagents.llm_clients import (
+    build_llm_kwargs,
+    create_llm_client,
+    create_tier_client,
+    tier_provider,
+)
 from tradingagents.memory import TradingMemoryLog, settlement
 from tradingagents.memory.reflection import Reflector
 from tradingagents.reporting import write_report_tree
@@ -22,7 +31,7 @@ from tradingagents.reporting import write_report_tree
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
 from .conditional_logic import ConditionalLogic
 from .propagation import Propagator
-from .setup import GraphSetup
+from .setup import ROLES, GraphSetup
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +66,8 @@ class TradingAgentsGraph:
         debug=False,
         config: dict[str, Any] = None,
         callbacks: list | None = None,
+        sentiment_sources: SourceFetcher = fetch_sentiment_sources,
+        tool_nodes: Mapping[str, ToolNode] | None = None,
     ):
         """Initialize the trading agents graph and components.
 
@@ -65,6 +76,12 @@ class TradingAgentsGraph:
             debug: Whether to run in debug mode
             config: Configuration dictionary. If None, uses default config
             callbacks: Optional list of callback handlers (e.g., for tracking LLM/tool stats)
+            sentiment_sources: Where the Sentiment Analyst's news, StockTwits and
+                Reddit blocks come from. Fetched live by default; pass a
+                function to serve them from data gathered before the run.
+            tool_nodes: Per analyst key ("market", "news", "fundamentals"), the
+                node that runs its tool calls instead of the live vendors. Its
+                tools must carry the names and arguments of the analyst's TOOLS.
         """
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
@@ -78,6 +95,7 @@ class TradingAgentsGraph:
         extra = {"callbacks": self.callbacks} if self.callbacks else {}
         self.deep_thinking_llm = create_tier_client(self.config, "deep", **extra).get_llm()
         self.quick_thinking_llm = create_tier_client(self.config, "quick", **extra).get_llm()
+        self.role_llms = self._role_llms()
 
         self.memory_log = TradingMemoryLog(self.config)
 
@@ -98,6 +116,10 @@ class TradingAgentsGraph:
             self.deep_thinking_llm,
             self.conditional_logic,
             max_tool_rounds,
+            sentiment_sources=sentiment_sources,
+            tool_nodes=tool_nodes,
+            role_llms=self.role_llms,
+            second_analyst_llm=self._second_analyst_llm(),
         )
 
         self.propagator = Propagator(
@@ -113,6 +135,39 @@ class TradingAgentsGraph:
         self.graph = self.workflow.compile()
         self._checkpointer_ctx = None
         self._resuming = False
+
+    def _role_llms(self) -> dict[str, Any]:
+        """A model for each role named in ``config["role_llms"]``, one client per provider and model.
+
+        ``role_llms`` maps a role (``setup.ROLES``) to ``{"provider", "model"}``.
+        A role left out keeps the quick or deep model, as before. Each
+        provider's own options (OpenAI's reasoning effort, Anthropic's effort)
+        are built for that provider, not the run's default one.
+        """
+        plan = self.config.get("role_llms") or {}
+        unknown = set(plan) - set(ROLES)
+        if unknown:
+            raise ValueError(f"role_llms names unknown roles: {sorted(unknown)}; known: {list(ROLES)}")
+        return {role: self._llm(spec["provider"], spec["model"]) for role, spec in plan.items()}
+
+    def _llm(self, provider: str, model: str) -> Any:
+        """One chat client per provider and model, with that provider's own options."""
+        clients = self.__dict__.setdefault("_clients", {})
+        if (provider, model) not in clients:
+            kwargs = build_llm_kwargs({**self.config, "llm_provider": provider})
+            if self.callbacks:
+                kwargs["callbacks"] = self.callbacks
+            # The configured endpoint belongs to the default provider only.
+            base_url = self.config.get("backend_url") if provider == self.config["llm_provider"] else None
+            clients[(provider, model)] = create_llm_client(
+                provider=provider, model=model, base_url=base_url, **kwargs,
+            ).get_llm()
+        return clients[(provider, model)]
+
+    def _second_analyst_llm(self) -> Any | None:
+        """The model that reads the evidence a second time (``config["double_analysts"]``), or None."""
+        spec = self.config.get("double_analysts")
+        return self._llm(spec["provider"], spec["model"]) if spec else None
 
     def resolve_instrument_context(self, ticker: str, asset_type: str = "stock",
                                    trade_date: str | None = None) -> str:

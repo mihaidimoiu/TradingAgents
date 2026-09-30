@@ -142,6 +142,11 @@ def cik_for(ticker: str) -> str | None:
     return None
 
 
+def company_facts(cik: str) -> dict:
+    """SEC's XBRL company facts for a CIK, through the same cache as the statements."""
+    return _cached_json(_FACTS_URL.format(cik=cik), f"CIK{cik}.json")
+
+
 def _span_index(fact: dict, spans: tuple[tuple[int, int], ...]) -> int | None:
     """Which of ``spans`` a duration fact covers (0 for an instant fact), or None."""
     if "start" not in fact:
@@ -154,7 +159,7 @@ def _as_of(facts: dict, tags: tuple[str, ...], as_of_date: str, spans: tuple[tup
            forms: tuple[str, ...] = ()) -> tuple[dict, str]:
     """({(period end, span index): value}, unit) for the tags the filer reports, as known then.
 
-    A period reported more than once takes its latest filing on or before the
+    A period reported more than once takes its latest filing before the
     date, so an amendment counts from the day it was filed and not before. The
     unit comes from the filing: most lines are USD, earnings per share are
     USD/shares, and scaling those alike would print a real figure as zero. A
@@ -173,7 +178,9 @@ def _as_of(facts: dict, tags: tuple[str, ...], as_of_date: str, spans: tuple[tup
             for fact in unit_values:
                 index = _span_index(fact, spans)
                 key = (fact["end"], index)
-                if fact["filed"] > as_of_date or index is None or key in values:
+                # Filed dates carry no time, and a filing accepted after the
+                # close is dated that day: only earlier days were known.
+                if fact["filed"] >= as_of_date or index is None or key in values:
                     continue
                 if not forms or fact.get("form", "").startswith(forms):
                     covered.add(key)
@@ -193,7 +200,7 @@ def _statement(kind: str, ticker: str, freq: str, as_of_date: str, title: str) -
     if cik is None:
         raise NoMarketDataError(ticker, ticker, "not a US SEC filer")
 
-    facts = _cached_json(_FACTS_URL.format(cik=cik), f"CIK{cik}.json")
+    facts = company_facts(cik)
     us_gaap = (facts.get("facts") or {}).get("us-gaap")
     if not us_gaap:
         raise NoMarketDataError(ticker, ticker, "US filer with no us-gaap facts")
@@ -219,7 +226,7 @@ def _statement(kind: str, ticker: str, freq: str, as_of_date: str, title: str) -
 
     header = (
         f"# {title} for {ticker.upper()} ({freq}), USD in millions unless the row says otherwise\n"
-        f"# SEC EDGAR facts filed on or before {as_of_date}, at the values filed then\n\n"
+        f"# SEC EDGAR facts filed before {as_of_date}, at the values filed then\n\n"
     )
     rows = [",".join([""] + [end + names[index] for end, index in periods])]
     for label, (values, unit) in lines.items():
@@ -238,12 +245,12 @@ def _statement(kind: str, ticker: str, freq: str, as_of_date: str, title: str) -
 
 
 def get_balance_sheet(ticker: str, freq: str = "quarterly", as_of_date: str | None = None) -> str:
-    """Balance sheet as filed on or before ``as_of_date``."""
+    """Balance sheet as filed before ``as_of_date``."""
     return _statement("balance_sheet", ticker, freq, as_of_date, "Balance Sheet")
 
 
 def get_income_statement(ticker: str, freq: str = "quarterly", as_of_date: str | None = None) -> str:
-    """Income statement as filed on or before ``as_of_date``.
+    """Income statement as filed before ``as_of_date``.
 
     A fourth quarter is never derived: filers report it only inside the annual
     figure, and subtracting three separately filed quarters would invent a number
@@ -253,5 +260,5 @@ def get_income_statement(ticker: str, freq: str = "quarterly", as_of_date: str |
 
 
 def get_cashflow(ticker: str, freq: str = "quarterly", as_of_date: str | None = None) -> str:
-    """Cash flow statement as filed on or before ``as_of_date``."""
+    """Cash flow statement as filed before ``as_of_date``."""
     return _statement("cashflow", ticker, freq, as_of_date, "Cash Flow Statement")
