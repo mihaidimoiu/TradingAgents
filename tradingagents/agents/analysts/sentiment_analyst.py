@@ -17,12 +17,18 @@ supports it and free text otherwise, so the band, score and confidence header
 reads the same across providers.
 """
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
+from typing import NamedTuple
 
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from tradingagents.agents.context import get_instrument_context_from_state, get_language_instruction
+from tradingagents.agents.context import (
+    get_instrument_context_from_state,
+    get_language_instruction,
+    get_prompt_extra,
+)
 from tradingagents.agents.post_screen import jev_screen
 from tradingagents.agents.schemas import SentimentReport, render_sentiment_report
 from tradingagents.agents.structured import (
@@ -44,13 +50,48 @@ def _seven_days_back(trade_date: str) -> str:
     return (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
 
 
-def create_sentiment_analyst(llm):
+class SentimentSources(NamedTuple):
+    """The three text blocks the sentiment prompt is built from."""
+
+    news: str
+    stocktwits: str
+    reddit: str
+
+
+# (ticker, start_date, end_date) -> the blocks for that window.
+SourceFetcher = Callable[[str, str, str], SentimentSources]
+
+
+def fetch_sentiment_sources(ticker: str, start_date: str, end_date: str) -> SentimentSources:
+    """Fetch news, StockTwits and Reddit live, trimmed to the analysis window.
+
+    Each fetcher degrades gracefully and returns a string (no exceptions
+    surface from here), so the LLM always sees something: real data or a
+    clear placeholder.
+    """
+    # Pass the analysis window so a historical run trims social posts to it
+    # instead of leaking today's chatter into a backtest (#1220).
+    screen = jev_screen(ticker)
+    return SentimentSources(
+        news=get_news.func(ticker, start_date, end_date),
+        stocktwits=fetch_stocktwits_messages(
+            ticker, limit=30, start_date=start_date, end_date=end_date, screen=screen
+        ),
+        reddit=fetch_reddit_posts(
+            ticker, subreddits_for(ticker), start_date=start_date, end_date=end_date, screen=screen
+        ),
+    )
+
+
+def create_sentiment_analyst(llm, sources: SourceFetcher = fetch_sentiment_sources):
     """Create a sentiment analyst node for the trading graph.
 
-    Pre-fetches news + StockTwits + Reddit data, injects them into the
-    prompt as structured blocks, and produces a deterministic sentiment
-    report via structured output (with a free-text fallback for providers
-    that do not support it).
+    Gets news + StockTwits + Reddit blocks from ``sources`` (fetched live by
+    default), injects them into the prompt, and produces a deterministic
+    sentiment report via structured output (with a free-text fallback for
+    providers that do not support it). A caller that gathers its data ahead
+    of the run -- a recorded corpus, a replayed backtest -- passes its own
+    ``sources`` and the node reads that instead of the network.
     """
     structured_llm = bind_structured(llm, SentimentReport, "Sentiment Analyst")
 
@@ -60,29 +101,17 @@ def create_sentiment_analyst(llm):
         start_date = _seven_days_back(end_date)
         instrument_context = get_instrument_context_from_state(state)
 
-        # Pre-fetch all three sources. Each fetcher degrades gracefully and
-        # returns a string (no exceptions surface from here), so the LLM
-        # always sees something — either real data or a clear placeholder.
-        news_block = get_news.func(ticker, start_date, end_date)
-        # Pass the analysis window so a historical run trims social posts to it
-        # instead of leaking today's chatter into a backtest (#1220).
-        screen = jev_screen(ticker)
-        stocktwits_block = fetch_stocktwits_messages(
-            ticker, limit=30, start_date=start_date, end_date=end_date, screen=screen
-        )
-        subreddits = subreddits_for(ticker)
-        reddit_block = fetch_reddit_posts(
-            ticker, subreddits, start_date=start_date, end_date=end_date, screen=screen
-        )
-
+        blocks = sources(ticker, start_date, end_date)
         system_message = _build_system_message(
             ticker=ticker,
             start_date=start_date,
             end_date=end_date,
-            news_block=news_block,
-            stocktwits_block=stocktwits_block,
-            reddit_block=reddit_block,
-            subreddits=subreddits,
+            news_block=blocks.news,
+            stocktwits_block=blocks.stocktwits,
+            reddit_block=blocks.reddit,
+            # The communities a Reddit block for this ticker is read from, so
+            # the prompt names the ones a caller's own sources searched too.
+            subreddits=subreddits_for(ticker),
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -94,9 +123,13 @@ def create_sentiment_analyst(llm):
                     # No tool-calling here: the data is pre-fetched into the
                     # prompt, so tool-range wording would only invite a
                     # hallucinated tool call (#1130).
-                    " Today's date is {current_date}; treat it as 'now' for all analysis. {instrument_context}"
                     " " + NO_EXTERNAL_TOOLS +
-                    "\n{system_message}",
+                    "\n{system_message}\n"
+                    # Volatile per-run values (trade date, instrument) go LAST
+                    # so the static prefix above stays byte-identical across
+                    # trade dates and tickers, and provider prompt caches can
+                    # reuse it between runs (#750).
+                    " Today's date is {current_date}; treat it as 'now' for all analysis. {instrument_context}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]
@@ -196,4 +229,4 @@ Fill the following fields:
 - **confidence**: low / medium / high, based on data quality and sample size.
 - **narrative**: Full source-by-source breakdown, divergences, dominant narrative themes, catalysts and risks, and a markdown summary table of key sentiment signals (direction, source, supporting evidence).
 
-{get_language_instruction()}"""
+{get_language_instruction()}{get_prompt_extra("sentiment_analyst")}"""

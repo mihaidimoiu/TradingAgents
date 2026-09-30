@@ -1,5 +1,8 @@
+import json
+import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
@@ -11,6 +14,8 @@ from .api_key_env import get_api_key_env
 from .base_client import BaseLLMClient, normalize_content
 from .capabilities import get_capabilities
 from .validators import validate_model
+
+logger = logging.getLogger(__name__)
 
 
 class NormalizedChatOpenAI(ChatOpenAI):
@@ -33,7 +38,21 @@ class NormalizedChatOpenAI(ChatOpenAI):
     """
 
     def invoke(self, input, config=None, **kwargs):
-        return normalize_content(super().invoke(input, config, **kwargs))
+        # The SDK retries timeouts, 5xx and 429 itself but decodes the body
+        # once, after its loop: one garbled 2xx body aborted a whole run. Only
+        # that is retried here, within the same `max_retries` budget; HTTP
+        # errors are left to the SDK so attempts do not multiply.
+        attempts = max(self.max_retries or 0, 0) + 1
+        for attempt in range(attempts):
+            try:
+                return normalize_content(super().invoke(input, config, **kwargs))
+            except json.JSONDecodeError as undecodable:
+                if attempt + 1 >= attempts:
+                    raise
+                delay = min(2.0 ** attempt, 8.0)
+                logger.warning("undecodable response body (%s), attempt %d/%d; retrying in %.0fs",
+                               undecodable, attempt + 1, attempts, delay)
+                time.sleep(delay)
 
     def with_structured_output(self, schema, *, method=None, **kwargs):
         caps = get_capabilities(self.model_name)
