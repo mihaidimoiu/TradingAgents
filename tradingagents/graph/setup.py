@@ -1,8 +1,11 @@
 import logging
 from collections import Counter
+from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, TypedDict
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
@@ -20,6 +23,10 @@ from tradingagents.agents import (
     create_sentiment_analyst,
     create_trader,
 )
+from tradingagents.agents.analysts.sentiment_analyst import (
+    SourceFetcher,
+    fetch_sentiment_sources,
+)
 from tradingagents.agents.analysts.turn import WRAP_UP
 from tradingagents.agents.state import AgentState
 
@@ -27,6 +34,13 @@ from .analyst_execution import build_analyst_execution_plan
 from .conditional_logic import ConditionalLogic
 
 logger = logging.getLogger(__name__)
+
+# Every role a model can be chosen for (``config["role_llms"]``), and the model
+# it falls back to: the analysts by their plan key.
+QUICK_ROLES = ("market", "social", "news", "fundamentals", "bull", "bear", "trader",
+               "aggressive", "conservative", "neutral")
+DEEP_ROLES = ("research_manager", "portfolio_manager")
+ROLES = QUICK_ROLES + DEEP_ROLES
 
 # Every target a shared conditional router can return. Each edge driven by the
 # router maps all of them, so a fall-through return (e.g. under prompt/i18n/
@@ -45,19 +59,77 @@ RISK_ANALYSIS_PATH_MAP = {
 }
 
 
+# A provider that did not answer: a timeout, a dropped connection, a rate limit,
+# a 5xx. By name, so no provider SDK is imported here. Anything else (a bug, a
+# caller's cancellation) still ends the run.
+PROVIDER_FAILURES = frozenset({
+    "APITimeoutError", "APIConnectionError", "RateLimitError", "InternalServerError",
+    "ServiceUnavailableError", "TimeoutException", "ReadTimeout", "ConnectTimeout",
+})
+
+
+def _provider_failure(error: BaseException) -> bool:
+    return isinstance(error, (TimeoutError, ConnectionError)) or any(
+        cls.__name__ in PROVIDER_FAILURES for cls in type(error).__mro__
+    )
+
+
+def _resilient(spec, agent):
+    """The analyst, with a provider failure ending only its own report.
+
+    The analysts are independent; one that times out used to end the whole
+    run after the others had finished. Its report now says it is missing and
+    why, and the debate goes on with the rest.
+    """
+    def run(state, *args, **kwargs):
+        try:
+            return agent(state, *args, **kwargs)
+        except Exception as error:
+            if not _provider_failure(error):
+                raise
+            note = (f"The {spec.key} analyst's report is missing: the model did not answer "
+                    f"({type(error).__name__}: {str(error)[:200]}). Weigh the other reports without it; "
+                    "do not infer what it would have said.")
+            return {"messages": [AIMessage(content=note)], spec.report_key: note}
+
+    return run
+
+
+def model_label(llm: Any) -> str:
+    """The model id a chat client was built for, for a reader of the report."""
+    return str(getattr(llm, "model_name", None) or getattr(llm, "model", None) or type(llm).__name__)
+
+
+def _paired(spec, first: tuple[str, Any], second: tuple[str, Any]):
+    """One analyst run on two models at once; the debate reads both reports, each under its model.
+
+    Two independent readings of the same evidence: where they disagree is the
+    debate's to weigh, not averaged away here.
+    """
+    def run(state, config: RunnableConfig | None = None) -> dict:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            answers = [(label, pool.submit(graph.invoke, state, config)) for label, graph in (first, second)]
+            readings = [(label, future.result()[spec.report_key]) for label, future in answers]
+        return {spec.report_key: "\n\n".join(
+            f"## {spec.key.capitalize()} analysis by {label}\n\n{report}" for label, report in readings)}
+
+    return run
+
+
 def _tools_or_done(state) -> str:
     """Route an analyst's turn: run its tool calls, or finish with its report."""
     return "tools" if state["messages"][-1].tool_calls else END
 
 
-def _analyst_graph(spec, agent, max_tool_rounds: int):
+def _analyst_graph(spec, agent, max_tool_rounds: int, tools: ToolNode | None = None):
     """One analyst as a graph of its own: the model and its tools, on a private message history.
 
     It returns only its report, so analysts running side by side never write the
     same key, and its tool calls never reach the other analysts' messages. After
     ``max_tool_rounds`` rounds of tool calls it is told to write its report, and
     that turn ends it whatever it answers, so a model that keeps calling tools
-    cannot run the graph into its recursion limit (#1420).
+    cannot run the graph into its recursion limit (#1420). `tools` is a caller's
+    node in place of the default (the `tool_nodes` hook).
     """
     output = TypedDict(f"{spec.key.capitalize()}Report", {spec.report_key: str})
     graph = StateGraph(AgentState, output_schema=output)
@@ -82,7 +154,7 @@ def _analyst_graph(spec, agent, max_tool_rounds: int):
                        spec.agent_node, max_tool_rounds, repeated)
         return agent({**state, "messages": [*state["messages"], HumanMessage(WRAP_UP)]})
 
-    graph.add_node("tools", ToolNode(list(spec.tools)))
+    graph.add_node("tools", tools or ToolNode(list(spec.tools)))
     graph.add_node("wrap_up", wrap_up)
     graph.add_conditional_edges("agent", _tools_or_done, ["tools", END])
     graph.add_conditional_edges("tools", more_or_wrap_up, ["agent", "wrap_up"])
@@ -99,12 +171,31 @@ class GraphSetup:
         deep_thinking_llm: Any,
         conditional_logic: ConditionalLogic,
         max_tool_rounds: int,
+        sentiment_sources: SourceFetcher = fetch_sentiment_sources,
+        tool_nodes: Mapping[str, ToolNode] | None = None,
+        role_llms: Mapping[str, Any] | None = None,
+        second_analyst_llm: Any | None = None,
     ):
-        """Initialize with required components."""
+        """Initialize with required components.
+
+        ``role_llms`` gives a role (``ROLES``) its own model; any other role
+        keeps the quick or deep one. ``second_analyst_llm`` runs every analyst
+        a second time on that model, and the debate reads both reports.
+        """
+        self.sentiment_sources = sentiment_sources
+        self.tool_nodes = tool_nodes or {}
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.conditional_logic = conditional_logic
         self.max_tool_rounds = max_tool_rounds
+        self.role_llms = dict(role_llms or {})
+        self.second_analyst_llm = second_analyst_llm
+
+    def llm_for(self, role: str) -> Any:
+        """The model that plays `role`."""
+        if role in self.role_llms:
+            return self.role_llms[role]
+        return self.deep_thinking_llm if role in DEEP_ROLES else self.quick_thinking_llm
 
     def setup_graph(
         self, selected_analysts=("market", "social", "news", "fundamentals")
@@ -121,27 +212,36 @@ class GraphSetup:
         plan = build_analyst_execution_plan(selected_analysts)
 
         analyst_factories = {
-            "market": lambda: create_market_analyst(self.quick_thinking_llm),
-            "social": lambda: create_sentiment_analyst(self.quick_thinking_llm),
-            "news": lambda: create_news_analyst(self.quick_thinking_llm),
-            "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm),
+            "market": create_market_analyst,
+            "social": lambda llm: create_sentiment_analyst(llm, sources=self.sentiment_sources),
+            "news": create_news_analyst,
+            "fundamentals": create_fundamentals_analyst,
         }
 
-        bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
-        bear_researcher_node = create_bear_researcher(self.quick_thinking_llm)
-        research_manager_node = create_research_manager(self.deep_thinking_llm)
-        trader_node = create_trader(self.quick_thinking_llm)
+        bull_researcher_node = create_bull_researcher(self.llm_for("bull"))
+        bear_researcher_node = create_bear_researcher(self.llm_for("bear"))
+        research_manager_node = create_research_manager(self.llm_for("research_manager"))
+        trader_node = create_trader(self.llm_for("trader"))
 
-        aggressive_analyst = create_aggressive_debator(self.quick_thinking_llm)
-        neutral_analyst = create_neutral_debator(self.quick_thinking_llm)
-        conservative_analyst = create_conservative_debator(self.quick_thinking_llm)
-        portfolio_manager_node = create_portfolio_manager(self.deep_thinking_llm)
+        aggressive_analyst = create_aggressive_debator(self.llm_for("aggressive"))
+        neutral_analyst = create_neutral_debator(self.llm_for("neutral"))
+        conservative_analyst = create_conservative_debator(self.llm_for("conservative"))
+        portfolio_manager_node = create_portfolio_manager(self.llm_for("portfolio_manager"))
 
         workflow = StateGraph(AgentState)
 
         for spec in plan.specs:
-            workflow.add_node(spec.agent_node,
-                              _analyst_graph(spec, analyst_factories[spec.key](), self.max_tool_rounds))
+            def analyst(llm, spec=spec):
+                return _analyst_graph(spec, _resilient(spec, analyst_factories[spec.key](llm)),
+                                      self.max_tool_rounds, self.tool_nodes.get(spec.key))
+
+            first = self.llm_for(spec.key)
+            if self.second_analyst_llm is None:
+                workflow.add_node(spec.agent_node, analyst(first))
+            else:
+                workflow.add_node(spec.agent_node, _paired(
+                    spec, (model_label(first), analyst(first)),
+                    (model_label(self.second_analyst_llm), analyst(self.second_analyst_llm))))
 
         workflow.add_node("Bull Researcher", bull_researcher_node)
         workflow.add_node("Bear Researcher", bear_researcher_node)

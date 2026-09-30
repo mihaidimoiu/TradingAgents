@@ -5,7 +5,11 @@ from io import StringIO
 
 import pandas as pd
 
-from tradingagents.dataflows.errors import VendorNotConfiguredError, VendorUnavailableError
+from tradingagents.dataflows.errors import (
+    NoMarketDataError,
+    VendorNotConfiguredError,
+    VendorUnavailableError,
+)
 from tradingagents.dataflows.net import get_scrubbed
 
 API_BASE_URL = "https://www.alphavantage.co/query"
@@ -109,6 +113,12 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
     # genuine rate limit and an invalid/missing key aren't conflated (#991):
     # rate-limit phrasing is checked first because those notices also mention
     # "API key" ("your API key ... 25 requests per day").
+    # A refused symbol ("Invalid ticker format: SAP.DE") is no data for it, not
+    # data: returned as text, it stopped the chain before a vendor that has it.
+    if isinstance(response_json, dict) and (refused := response_json.get("Error Message")):
+        symbol = str(api_params.get("tickers") or api_params.get("symbol") or api_params.get("function", ""))
+        raise NoMarketDataError(symbol, detail=f"Alpha Vantage: {refused}")
+
     notice = response_json.get("Information") or response_json.get("Note")
     if notice:
         low = notice.lower()

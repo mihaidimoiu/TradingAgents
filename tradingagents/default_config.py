@@ -19,6 +19,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
+    "TRADINGAGENTS_LLM_TIMEOUT":          "llm_timeout",
     "TRADINGAGENTS_LLM_MAX_RETRIES":      "llm_max_retries",
     "TRADINGAGENTS_MAX_TOKENS":           "max_tokens",
     # Provider-specific reasoning/thinking knobs (None = each provider's own
@@ -103,6 +104,8 @@ def build_default_config() -> dict:
         # variation on models that honor it; reasoning models largely ignore it
         # and no setting makes LLM output bit-identical across runs (see README).
         "temperature": None,
+        # Request timeout forwarded to provider chat clients. None preserves SDK defaults.
+        "llm_timeout": None,
         # SDK retry budget forwarded to every provider chat client. None leaves each
         # provider/SDK at its own default (usually 2). Raise it to ride out bursty
         # 429 throttling on rate-limited deployments instead of aborting a run (#1091).
@@ -118,6 +121,9 @@ def build_default_config() -> dict:
         # Output language for analyst reports and final decision
         # Internal agent debate stays in English for reasoning quality
         "output_language": "English",
+        # Extra instructions appended to one agent's prompt, keyed by agent name
+        # (see agents.context.PROMPT_EXTRA_AGENTS), e.g. {"trader": "..."}.
+        "prompt_extra": {},
         # Debate and discussion settings
         "max_debate_rounds": 1,
         "max_risk_discuss_rounds": 1,

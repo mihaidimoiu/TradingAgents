@@ -69,8 +69,9 @@ def _hold_windows(handle) -> Iterator[None]:
             break
         except OSError as exc:
             # LK_LOCK gives up after about ten seconds of another writer's hold;
-            # any other failure is not a wait.
-            if exc.errno != errno.EDEADLOCK:
+            # any other failure is not a wait. EDEADLK is Windows' EDEADLOCK under
+            # the name every platform's errno has, so this is testable anywhere.
+            if exc.errno != errno.EDEADLK:
                 raise
     try:
         yield
