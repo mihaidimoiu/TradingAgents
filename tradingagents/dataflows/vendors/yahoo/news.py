@@ -18,8 +18,10 @@ def _extract_article_data(article: dict) -> dict:
         content = article["content"]
         title = content.get("title", "No title")
         summary = content.get("summary", "")
-        provider = content.get("provider", {})
-        publisher = provider.get("displayName", "Unknown")
+        # `provider` may be present but null, and `dict.get` falls back only
+        # when a key is absent (upstream #1458): one such article failed the whole fetch.
+        provider = content.get("provider") or {}
+        publisher = provider.get("displayName") or "Unknown"
 
         url_obj = content.get("canonicalUrl") or content.get("clickThroughUrl") or {}
         link = url_obj.get("url", "")
