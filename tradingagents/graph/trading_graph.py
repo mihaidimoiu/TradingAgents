@@ -2,10 +2,11 @@ import hashlib
 import json
 import logging
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from langgraph.prebuilt import ToolNode
@@ -18,12 +19,8 @@ from tradingagents.dataflows.config import run_config, run_config_context, set_c
 from tradingagents.dataflows.date_window import get_current_date, is_historical
 from tradingagents.dataflows.symbols import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.llm_clients import (
-    build_llm_kwargs,
-    create_llm_client,
-    create_tier_client,
-    tier_provider,
-)
+from tradingagents.llm_clients import build_llm_kwargs, create_llm_client, tier_provider
+from tradingagents.llm_clients.fallback import CreditFallback, Exhausted
 from tradingagents.memory import TradingMemoryLog, settlement
 from tradingagents.memory.reflection import Reflector
 from tradingagents.reporting import write_report_tree
@@ -60,6 +57,9 @@ _NOT_IN_SIGNATURE = frozenset({
 class TradingAgentsGraph:
     """Main class that orchestrates the trading agents framework."""
 
+    # Read-only default, for a graph built without __init__ (as tests do): no fallbacks.
+    credit_fallbacks: Mapping[tuple[str, str], tuple[str, str]] = MappingProxyType({})
+
     def __init__(
         self,
         selected_analysts=("market", "social", "news", "fundamentals"),
@@ -68,6 +68,8 @@ class TradingAgentsGraph:
         callbacks: list | None = None,
         sentiment_sources: SourceFetcher = fetch_sentiment_sources,
         tool_nodes: Mapping[str, ToolNode] | None = None,
+        credit_fallbacks: Mapping[tuple[str, str], tuple[str, str]] | None = None,
+        on_fallback: Callable[[str], None] | None = None,
     ):
         """Initialize the trading agents graph and components.
 
@@ -82,19 +84,29 @@ class TradingAgentsGraph:
             tool_nodes: Per analyst key ("market", "news", "fundamentals"), the
                 node that runs its tool calls instead of the live vendors. Its
                 tools must carry the names and arguments of the analyst's TOOLS.
+            credit_fallbacks: (provider, model) -> the (provider, model) that
+                answers in its place once that provider has no credit left.
+                Kept out of the config: it is no part of the checkpoint signature.
+            on_fallback: Told, once per provider, that it ran out and was replaced.
         """
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
         self.callbacks = callbacks or []
+        self.credit_fallbacks = dict(credit_fallbacks or {})
+        self.exhausted = Exhausted(on_fallback)
 
         set_config(self.config)
 
         os.makedirs(self.config["data_cache_dir"], exist_ok=True)
         os.makedirs(self.config["results_dir"], exist_ok=True)
 
-        extra = {"callbacks": self.callbacks} if self.callbacks else {}
-        self.deep_thinking_llm = create_tier_client(self.config, "deep", **extra).get_llm()
-        self.quick_thinking_llm = create_tier_client(self.config, "quick", **extra).get_llm()
+        # Each tier on its own provider (#1440), through _llm so it keeps its credit fallback.
+        self.deep_thinking_llm = self._llm(
+            tier_provider(self.config, "deep"), self.config["deep_think_llm"], tier="deep"
+        )
+        self.quick_thinking_llm = self._llm(
+            tier_provider(self.config, "quick"), self.config["quick_think_llm"], tier="quick"
+        )
         self.role_llms = self._role_llms()
 
         self.memory_log = TradingMemoryLog(self.config)
@@ -150,19 +162,33 @@ class TradingAgentsGraph:
             raise ValueError(f"role_llms names unknown roles: {sorted(unknown)}; known: {list(ROLES)}")
         return {role: self._llm(spec["provider"], spec["model"]) for role, spec in plan.items()}
 
-    def _llm(self, provider: str, model: str) -> Any:
-        """One chat client per provider and model, with that provider's own options."""
+    def _llm(self, provider: str, model: str, tier: str | None = None) -> Any:
+        """The client for `provider`/`model`, handing over to its credit fallback when it has one."""
+        backup = self.credit_fallbacks.get((provider, model))
+        if backup is None or backup[0] == provider:
+            return self._client(provider, model, tier)
+        return CreditFallback(self._client(provider, model, tier), self._client(*backup), provider,
+                              f"{backup[0]}/{backup[1]}", self.exhausted)
+
+    def _client(self, provider: str, model: str, tier: str | None = None) -> Any:
+        """One chat client per provider, model and endpoint, with that provider's own options.
+
+        A tier's own endpoint (``{tier}_think_backend_url``) wins; otherwise the
+        configured endpoint belongs to the default provider only, as in
+        ``create_tier_client``.
+        """
+        base_url = (self.config.get(f"{tier}_think_backend_url") if tier else None) or (
+            self.config.get("backend_url") if provider.lower() == self.config["llm_provider"].lower() else None
+        )
         clients = self.__dict__.setdefault("_clients", {})
-        if (provider, model) not in clients:
+        if (provider, model, base_url) not in clients:
             kwargs = build_llm_kwargs({**self.config, "llm_provider": provider})
             if self.callbacks:
                 kwargs["callbacks"] = self.callbacks
-            # The configured endpoint belongs to the default provider only.
-            base_url = self.config.get("backend_url") if provider == self.config["llm_provider"] else None
-            clients[(provider, model)] = create_llm_client(
+            clients[(provider, model, base_url)] = create_llm_client(
                 provider=provider, model=model, base_url=base_url, **kwargs,
             ).get_llm()
-        return clients[(provider, model)]
+        return clients[(provider, model, base_url)]
 
     def _second_analyst_llm(self) -> Any | None:
         """The model that reads the evidence a second time (``config["double_analysts"]``), or None."""
