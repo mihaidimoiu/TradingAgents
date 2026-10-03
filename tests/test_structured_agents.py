@@ -486,6 +486,18 @@ class TestSentimentAnalystAgent:
         [(ticker, start, end)] = asked
         assert ticker == "NVDA" and start < end
 
+    def test_the_prompt_names_the_subreddits_the_caller_searched(self):
+        """A caller that read r/Forex must not have its posts introduced as r/wallstreetbets'."""
+        from tradingagents.agents.analysts import sentiment_analyst as sentiment
+
+        def recorded(ticker, start_date, end_date):
+            return sentiment.SentimentSources(news="n", stocktwits="s", reddit="r", subreddits=("Forex",))
+
+        captured = {}
+        create_sentiment_analyst(_structured_sentiment_llm(captured), sources=recorded)(_make_sentiment_state())
+        prompt = "\n".join(str(m) for m in captured["prompt"])
+        assert "r/Forex" in prompt and "r/wallstreetbets" not in prompt
+
     def test_default_sources_fetch_live(self):
         from tradingagents.agents.analysts import sentiment_analyst as sentiment
 

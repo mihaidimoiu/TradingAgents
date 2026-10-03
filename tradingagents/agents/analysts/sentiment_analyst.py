@@ -56,6 +56,8 @@ class SentimentSources(NamedTuple):
     news: str
     stocktwits: str
     reddit: str
+    # The subreddits the Reddit block was read from; None is ``subreddits_for(ticker)``.
+    subreddits: tuple[str, ...] | None = None
 
 
 # (ticker, start_date, end_date) -> the blocks for that window.
@@ -109,9 +111,9 @@ def create_sentiment_analyst(llm, sources: SourceFetcher = fetch_sentiment_sourc
             news_block=blocks.news,
             stocktwits_block=blocks.stocktwits,
             reddit_block=blocks.reddit,
-            # The communities a Reddit block for this ticker is read from, so
-            # the prompt names the ones a caller's own sources searched too.
-            subreddits=subreddits_for(ticker),
+            # The prompt names the communities the Reddit block came from: a
+            # caller's own sources may have searched others than the default.
+            subreddits=blocks.subreddits or subreddits_for(ticker),
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -173,10 +175,13 @@ def _build_system_message(
     """Assemble the sentiment-analyst system message with structured data blocks."""
     if subreddits == DEFAULT_SUBREDDITS:
         character = "r/wallstreetbets is often contrarian/exuberant; r/stocks more measured; r/investing longer-term"
-    elif len(subreddits) > len(CRYPTO_SUBREDDITS):
+    elif subreddits[-len(CRYPTO_SUBREDDITS):] == CRYPTO_SUBREDDITS and len(subreddits) > len(CRYPTO_SUBREDDITS):
         character = f"r/{subreddits[0]} leans toward the coin's holders; r/CryptoCurrency and r/CryptoMarkets are broader"
-    else:
+    elif subreddits == CRYPTO_SUBREDDITS:
         character = "r/CryptoCurrency and r/CryptoMarkets are broad crypto communities"
+    else:
+        # A caller's own communities: their character is not known here.
+        character = "a focused community reads differently from a general one"
     return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
 
 ## Data sources (pre-fetched, in this prompt)
