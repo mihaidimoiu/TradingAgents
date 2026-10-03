@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Changes that need action when upgrading are listed under "Upgrading from" in their release.
 
+## [Unreleased]
+
+### Fixed
+
+- **Double analysts keep the run's config.** Both models' threads run in a copy of the caller's context, so they read the run's vendors, prompt additions and output language, not whatever another run left process-wide.
+- **Building a graph no longer changes other runs.** The constructor stops writing its config process-wide; every run already binds its own.
+- **A `tool_nodes` mapping must cover every analyst with tools.** One left out is refused when the graph is built, instead of quietly calling the live vendors.
+- **A model client copied or unpickled before initialisation** no longer recurses in `CreditFallback.__getattr__`.
+
+### Added
+
+- `log_states` (default on): turn off the per-run state JSON under `results_dir` when the embedding app keeps its own record.
+- `report_missing(text)`: tells a failed analyst's note from a report, for a caller that stores reports.
+
+### Upgrading from 0.6.0
+
+- The terminal UI's dependencies (typer, questionary, rich) moved to the `cli` extra: install `pip install ".[cli]"` for the `tradingagents` command. A library install no longer pulls them.
+
 ## [0.6.0] — 2026-10-03
 
 HTML reports, a provider per model tier, past decisions settled for every ticker while the analysts work, and company news read while Yahoo's news feed is down.

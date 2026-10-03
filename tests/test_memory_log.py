@@ -1298,3 +1298,16 @@ def test_a_run_does_not_wait_on_another_settlement_pass(tmp_path):
     worker.join()
 
     assert elapsed < 1 and result.settled == [] and result.failed == []
+
+
+def test_a_graph_told_not_to_log_states_writes_no_state_file(tmp_path):
+    """An app that keeps its own record of a run had every debate also dumped, unpruned, under results_dir."""
+    graph = TradingAgentsGraph.__new__(TradingAgentsGraph)
+    graph.config = {"log_states": False, "results_dir": str(tmp_path)}
+    graph.memory_log = MagicMock()
+    state = {"company_of_interest": "NVDA", "final_trade_decision": "**Rating**: Hold", "final_rating": "Hold"}
+
+    graph.record_decision("NVDA", "2026-01-05", state)
+
+    assert list(tmp_path.iterdir()) == []
+    graph.memory_log.store_decision.assert_called_once()

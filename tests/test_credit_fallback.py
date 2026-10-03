@@ -38,6 +38,18 @@ def test_no_credit_switches_once_and_the_provider_is_skipped_after():
 
 
 @pytest.mark.unit
+def test_an_instance_not_yet_initialised_has_no_attributes_rather_than_recursing():
+    """copy and pickle build the instance before its fields: __getattr__ read self.primary and re-entered."""
+    import copy
+
+    bare = CreditFallback.__new__(CreditFallback)
+    with pytest.raises(AttributeError):
+        _ = bare.model_name
+    llm = CreditFallback(Model("claude"), Model("gpt"), "anthropic", "openai/gpt", Exhausted())
+    assert copy.copy(llm).invoke("a") == "claude:a"
+
+
+@pytest.mark.unit
 def test_any_other_error_still_fails_the_call():
     rate_limited = RuntimeError("Error code: 429 - {'code': 'rate_limit_exceeded'}")
     llm = CreditFallback(Model("gpt", rate_limited), Model("claude"), "openai", "anthropic/claude", Exhausted())
