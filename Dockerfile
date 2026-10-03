@@ -8,7 +8,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /build
 COPY . .
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[cli]"
 
 FROM python:3.13-slim
 

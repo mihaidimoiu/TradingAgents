@@ -15,7 +15,7 @@ import tradingagents
 from tradingagents.agents.analysts.sentiment_analyst import SourceFetcher, fetch_sentiment_sources
 from tradingagents.agents.context import build_instrument_context, resolve_instrument_identity
 from tradingagents.agents.rating import run_rating
-from tradingagents.dataflows.config import run_config, run_config_context, set_config
+from tradingagents.dataflows.config import run_config, run_config_context
 from tradingagents.dataflows.date_window import get_current_date, is_historical
 from tradingagents.dataflows.symbols import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -50,7 +50,7 @@ def _validate_trade_date(trade_date) -> str:
 # Config keys that do not change what a run writes: where it keeps its files,
 # whether it checkpoints, and how often it retries a provider.
 _NOT_IN_SIGNATURE = frozenset({
-    "results_dir", "data_cache_dir", "memory_log_path", "checkpoint_enabled", "llm_max_retries",
+    "results_dir", "data_cache_dir", "memory_log_path", "checkpoint_enabled", "llm_max_retries", "log_states",
 })
 
 
@@ -95,7 +95,9 @@ class TradingAgentsGraph:
         self.credit_fallbacks = dict(credit_fallbacks or {})
         self.exhausted = Exhausted(on_fallback)
 
-        set_config(self.config)
+        # Not set_config: every run binds this graph's config for itself
+        # (propagate, the stream path, settlement). Written process-wide, a
+        # graph built for one run changed the vendors of another one running.
 
         os.makedirs(self.config["data_cache_dir"], exist_ok=True)
         os.makedirs(self.config["results_dir"], exist_ok=True)
@@ -439,7 +441,8 @@ class TradingAgentsGraph:
     def record_decision(self, company_name, trade_date, final_state):
         """Record a finished run: its state log, and its decision in the memory log
         for reflection on the next same-ticker run. propagate() and the CLI both end here."""
-        self._log_state(trade_date, final_state)
+        if self.config.get("log_states", True):
+            self._log_state(trade_date, final_state)
         decision = final_state.get("final_trade_decision")
         if not decision:
             logger.warning("No final decision for %s on %s; nothing added to the memory log",
