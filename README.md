@@ -132,10 +132,11 @@ uv venv --python 3.13
 source .venv/bin/activate
 ```
 
-Install the package and its dependencies (`uv pip install .` with uv):
+Install the package with its command-line interface (`uv pip install ".[cli]"` with uv):
 ```bash
-pip install .
+pip install ".[cli]"
 ```
+A library install, embedding the graph in another app, needs only `pip install .`.
 
 ### Docker
 

@@ -68,6 +68,38 @@ def test_double_analysts_run_each_analyst_on_both_models_and_hand_the_debate_bot
     assert "## News analysis by claude-sonnet-5\n\nB says quiet week" in report
 
 
+def test_both_models_of_a_double_analyst_read_the_runs_own_config():
+    """The pool threads started with an empty context: the run's config was lost, and
+    get_config served whatever another run had left process-wide."""
+    from langchain_core.messages import AIMessage
+
+    from tradingagents.dataflows.config import get_config, run_config
+    from tradingagents.graph.analyst_execution import build_analyst_execution_plan
+    from tradingagents.graph.setup import _analyst_graph, _paired
+
+    spec = next(s for s in build_analyst_execution_plan(["news"]).specs if s.key == "news")
+
+    def reader(name):
+        def agent(state):
+            language = get_config().get("output_language")
+            return {"messages": [AIMessage(content="done")], spec.report_key: f"{name} in {language}"}
+        return _analyst_graph(spec, agent, max_tool_rounds=5)
+
+    with run_config({"output_language": "Romanian"}):
+        report = _paired(spec, ("a", reader("A")), ("b", reader("B")))({"messages": []})[spec.report_key]
+    assert "A in Romanian" in report and "B in Romanian" in report
+
+
+def test_tool_nodes_missing_an_analyst_with_tools_is_refused_not_served_live():
+    """The missing analyst fell back to the live vendors, beside the others' frozen data."""
+    from langgraph.prebuilt import ToolNode
+
+    setup = GraphSetup("quick", "deep", conditional_logic=None, max_tool_rounds=5,
+                       tool_nodes={"news": ToolNode([])})
+    with pytest.raises(ValueError, match="no node for the market analyst"):
+        setup.setup_graph(["market", "news"])
+
+
 def test_an_unknown_role_is_refused_rather_than_ignored():
     graph = trading_graph.TradingAgentsGraph.__new__(trading_graph.TradingAgentsGraph)
     graph.callbacks, graph.config = [], {"llm_provider": "openai",

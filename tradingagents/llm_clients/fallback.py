@@ -75,7 +75,12 @@ class CreditFallback(Runnable):
 
     def __getattr__(self, name: str) -> Any:
         # Only reached for what Runnable itself lacks: the model's own attributes.
-        attr = getattr(self.primary, name)
+        # Read from __dict__: on an instance not yet initialised (copy, pickle)
+        # `self.primary` would re-enter here without end.
+        primary = self.__dict__.get("primary")
+        if primary is None:
+            raise AttributeError(name)
+        attr = getattr(primary, name)
         if name not in DERIVING:
             return attr
 

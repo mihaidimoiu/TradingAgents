@@ -6,10 +6,10 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version < '3.12' and sys_platform == 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
-    "python_full_version < '3.12' and sys_platform == 'emscripten'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.12' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and sys_platform == 'emscripten'",
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
@@ -2193,11 +2193,8 @@ dependencies = [
     { name = "pandas" },
     { name = "python-dotenv" },
     { name = "pytz" },
-    { name = "questionary" },
     { name = "requests" },
-    { name = "rich" },
     { name = "stockstats" },
-    { name = "typer" },
     { name = "typing-extensions" },
     { name = "yfinance" },
 ]
@@ -2205,6 +2202,11 @@ dependencies = [
 [package.optional-dependencies]
 bedrock = [
     { name = "langchain-aws" },
+]
+cli = [
+    { name = "questionary" },
+    { name = "rich" },
+    { name = "typer" },
 ]
 dev = [
     { name = "pytest" },
@@ -2226,16 +2228,16 @@ requires-dist = [
     { name = "pytest-subtests", marker = "extra == 'dev'", specifier = ">=0.13" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pytz", specifier = ">=2025.2" },
-    { name = "questionary", specifier = ">=2.1.0" },
+    { name = "questionary", marker = "extra == 'cli'", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.4" },
-    { name = "rich", specifier = ">=14.0.0" },
+    { name = "rich", marker = "extra == 'cli'", specifier = ">=14.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16" },
     { name = "stockstats", specifier = ">=0.6.5" },
-    { name = "typer", specifier = ">=0.21.0" },
+    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.21.0" },
     { name = "typing-extensions", specifier = ">=4.14.0" },
     { name = "yfinance", specifier = ">=1.7.0" },
 ]
-provides-extras = ["dev", "bedrock"]
+provides-extras = ["cli", "dev", "bedrock"]
 
 [[package]]
 name = "truststore"

@@ -2,6 +2,7 @@ import logging
 from collections import Counter
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from typing import Any, TypedDict
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -74,6 +75,14 @@ def _provider_failure(error: BaseException) -> bool:
     )
 
 
+MISSING_REPORT = "analyst's report is missing: the model did not answer"
+
+
+def report_missing(report: str) -> bool:
+    """Whether `report` is the note a failed analyst leaves instead of a report."""
+    return MISSING_REPORT in (report or "")[:200]
+
+
 def _resilient(spec, agent):
     """The analyst, with a provider failure ending only its own report.
 
@@ -87,7 +96,7 @@ def _resilient(spec, agent):
         except Exception as error:
             if not _provider_failure(error):
                 raise
-            note = (f"The {spec.key} analyst's report is missing: the model did not answer "
+            note = (f"The {spec.key} {MISSING_REPORT} "
                     f"({type(error).__name__}: {str(error)[:200]}). Weigh the other reports without it; "
                     "do not infer what it would have said.")
             return {"messages": [AIMessage(content=note)], spec.report_key: note}
@@ -108,7 +117,12 @@ def _paired(spec, first: tuple[str, Any], second: tuple[str, Any]):
     """
     def run(state, config: RunnableConfig | None = None) -> dict:
         with ThreadPoolExecutor(max_workers=2) as pool:
-            answers = [(label, pool.submit(graph.invoke, state, config)) for label, graph in (first, second)]
+            # A pool thread starts with an empty context: without the caller's,
+            # the run's config (its vendors, prompt_extra, language) is lost and
+            # get_config falls back to whatever another run left process-wide.
+            # One copy each: a context cannot be entered by two threads at once.
+            answers = [(label, pool.submit(copy_context().run, graph.invoke, state, config))
+                       for label, graph in (first, second)]
             readings = [(label, future.result()[spec.report_key]) for label, future in answers]
         return {spec.report_key: "\n\n".join(
             f"## {spec.key.capitalize()} analysis by {label}\n\n{report}" for label, report in readings)}
@@ -183,7 +197,10 @@ class GraphSetup:
         a second time on that model, and the debate reads both reports.
         """
         self.sentiment_sources = sentiment_sources
-        self.tool_nodes = tool_nodes or {}
+        # None: every analyst calls the live vendors. A mapping must cover every
+        # analyst that has tools: one missing would quietly fetch live data
+        # beside the others' frozen pack.
+        self.tool_nodes = tool_nodes
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.conditional_logic = conditional_logic
@@ -231,9 +248,14 @@ class GraphSetup:
         workflow = StateGraph(AgentState)
 
         for spec in plan.specs:
+            if self.tool_nodes is not None and spec.tools and spec.key not in self.tool_nodes:
+                raise ValueError(f"tool_nodes has no node for the {spec.key} analyst, whose tools "
+                                 "would otherwise call the live vendors")
+
             def analyst(llm, spec=spec):
                 return _analyst_graph(spec, _resilient(spec, analyst_factories[spec.key](llm)),
-                                      self.max_tool_rounds, self.tool_nodes.get(spec.key))
+                                      self.max_tool_rounds,
+                                      None if self.tool_nodes is None else self.tool_nodes.get(spec.key))
 
             first = self.llm_for(spec.key)
             if self.second_analyst_llm is None:
