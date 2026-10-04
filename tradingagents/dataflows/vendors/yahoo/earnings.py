@@ -121,6 +121,49 @@ def _ratings(summary: pd.DataFrame | None) -> list[str]:
     ]
 
 
+def _change(now, then) -> float | None:
+    try:
+        return float(now) / float(then) - 1
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _targets(found: dict | None) -> list[str]:
+    if not found or found.get("mean") is None:
+        return ["- (unavailable)"]
+    return [f"- Current price: {_number(found.get('current'))}",
+            f"- Low {_number(found.get('low'))} · median {_number(found.get('median'))} · "
+            f"mean {_number(found.get('mean'))} · high {_number(found.get('high'))}",
+            f"- Mean target vs current price: {_percent(_change(found['mean'], found.get('current')))}"]
+
+
+def _trend(frame: pd.DataFrame | None) -> list[str]:
+    """How the consensus EPS moved: a rising estimate is the analysts revising up."""
+    if frame is None or frame.empty:
+        return ["- (unavailable)"]
+    columns = ("current", "7daysAgo", "30daysAgo", "60daysAgo", "90daysAgo")
+    rows = [f"| {period} | " + " | ".join(_number(row.get(column)) for column in columns)
+            + f" | {_percent(_change(row.get('current'), row.get('90daysAgo')))} |"
+            for period, row in frame.iterrows()]
+    return ["| Period | Now | 7 days ago | 30 days ago | 60 days ago | 90 days ago | Change over 90 days |",
+            "|---|---|---|---|---|---|---|", *rows]
+
+
+def _revisions(frame: pd.DataFrame | None) -> list[str]:
+    if frame is None or frame.empty:
+        return ["- (unavailable)"]
+
+    def count(row, *names):
+        # yfinance spells one column downLast7Days and the rest ...days.
+        return _number(next((row.get(name) for name in names if row.get(name) is not None), None), whole=True)
+
+    return ["| Period | Up, 7 days | Down, 7 days | Up, 30 days | Down, 30 days |", "|---|---|---|---|---|"] + [
+        f"| {period} | {count(row, 'upLast7days')} | {count(row, 'downLast7days', 'downLast7Days')} "
+        f"| {count(row, 'upLast30days')} | {count(row, 'downLast30days')} |"
+        for period, row in frame.iterrows()
+    ]
+
+
 def _fetch(read):
     """One yfinance surface; None on failure, so it costs that section and not the others."""
     try:
@@ -133,7 +176,7 @@ def get_earnings_context(
     ticker: Annotated[str, "ticker symbol of the company"],
     as_of_date: Annotated[str, "analysis date in YYYY-MM-DD format"] = None,
 ) -> str:
-    """The next earnings report and whether it is near, consensus, surprise history and analyst counts."""
+    """The next report and whether it is near, consensus and its revisions, price targets, surprises."""
     canonical = normalize_symbol(ticker)
     today = get_current_date()
     day = pd.Timestamp(as_of_date or today)
@@ -145,10 +188,18 @@ def get_earnings_context(
     if live:
         sections += ["## Next earnings report", *next_report(dates, day), "",
                      "## Consensus estimates (upcoming periods)",
+                     "Periods: 0q this quarter, +1q the next, 0y this fiscal year, +1y the next.",
                      *_estimates(_fetch(lambda: stock.earnings_estimate), "EPS"),
-                     *_estimates(_fetch(lambda: stock.revenue_estimate), "Revenue", _money), ""]
+                     *_estimates(_fetch(lambda: stock.revenue_estimate), "Revenue", _money), "",
+                     "## EPS estimate trend (consensus over the last 90 days)",
+                     *_trend(_fetch(lambda: stock.eps_trend)), "",
+                     "## EPS estimate revisions (analysts revising up or down)",
+                     *_revisions(_fetch(lambda: stock.eps_revisions)), "",
+                     "## Analyst price targets (12 months)",
+                     *_targets(_fetch(lambda: stock.analyst_price_targets)), ""]
     else:
-        sections += ["The next report date, consensus estimates and analyst counts are withheld: "
+        sections += ["The next report date, consensus estimates, their revisions, price targets and analyst "
+                     "counts are withheld: "
                      f"yfinance serves only today's, which postdate {day:%Y-%m-%d}.", ""]
     sections += [f"## Earnings surprises (reported on or before {day:%Y-%m-%d})", *surprises(dates, day)]
     if live:
