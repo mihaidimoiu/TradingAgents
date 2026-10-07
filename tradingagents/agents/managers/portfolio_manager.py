@@ -36,7 +36,9 @@ def create_portfolio_manager(llm):
 
         past_context = state.get("past_context", "")
         lessons_line = (
-            f"- Lessons from prior decisions and outcomes:\n{past_context}\n"
+            "- Lessons from prior decisions and outcomes (each dated; a rating in them is a past call, "
+            "not evidence about today: do not lean toward it or away from it, weigh only what its outcome "
+            f"teaches against this run's evidence):\n{past_context}\n"
             if past_context
             else ""
         )
