@@ -252,7 +252,9 @@ class TradingAgentsGraph:
 
         ``asset_type`` selects between the stock pipeline (default) and the
         crypto pipeline (``"crypto"``) shipped in #567 — the CLI auto-detects
-        from the ticker; programmatic callers pass it explicitly. When
+        from the ticker; programmatic callers pass it explicitly. Any value
+        other than ``"stock"`` is an instrument that is not a company: the
+        prompts then say "asset", not "company". When
         ``checkpoint_enabled`` is set in config, the graph is recompiled with
         a per-ticker SqliteSaver so a crashed run can resume from the last
         successful node on a subsequent invocation with the same ticker+date.
