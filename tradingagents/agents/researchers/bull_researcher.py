@@ -26,7 +26,16 @@ def create_bull_researcher(llm):
         fundamentals_label = (
             "Company fundamentals report"
             if asset_type == "stock"
-            else "Asset fundamentals report (may be unavailable for crypto)"
+            else "Asset fundamentals report (may be unavailable: it is not a company)"
+        )
+        focus = (
+            "- Growth Potential: Highlight the company's market opportunities, revenue projections, and scalability.\n"
+            "- Competitive Advantages: Emphasize factors like unique products, strong branding, or dominant market positioning.\n"
+            "- Positive Indicators: Use financial health, industry trends, and recent positive news as evidence."
+            if asset_type == "stock"
+            else "- Upside Drivers: Highlight what could lift the price: the trend and momentum, macro drivers (rates, the dollar, growth, policy), and demand outrunning supply.\n"
+            "- Flows and Positioning: Emphasize buying pressure, inflows, or positioning that leaves room to rise.\n"
+            "- Positive Indicators: Use the price data, macro data, and recent positive news as evidence."
         )
 
         # Prompt layout is cache-aware (#750): the debate-wide shared context
@@ -48,9 +57,7 @@ Conversation history of the debate: {history}
 You are a Bull Analyst advocating for investing in the {target_label}. Your task is to build a strong, evidence-based case emphasizing growth potential, competitive advantages, and positive market indicators. Leverage the research and data provided above to address concerns and counter bearish arguments effectively.
 
 Key points to focus on:
-- Growth Potential: Highlight the company's market opportunities, revenue projections, and scalability.
-- Competitive Advantages: Emphasize factors like unique products, strong branding, or dominant market positioning.
-- Positive Indicators: Use financial health, industry trends, and recent positive news as evidence.
+{focus}
 - Bear Counterpoints: Critically analyze the bear argument with specific data and sound reasoning, addressing concerns thoroughly and showing why the bull perspective holds stronger merit.
 - Engagement: Present your argument in a conversational style, engaging directly with the bear analyst's points and debating effectively rather than just listing data.
 
