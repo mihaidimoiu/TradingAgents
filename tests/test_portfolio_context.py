@@ -3,8 +3,9 @@
 Decisions were made with no knowledge of the current book, so "add to a full
 position" and "open a new one" read alike. The context is optional and carries
 three distinct states: a position, a flat book, and no context at all. Nothing
-may present the third as the second. The research team stays blind so the bull
-and bear cases are not anchored by the caller's position.
+may present the third as the second. The bull and bear researchers stay blind
+so their cases are not anchored by the caller's position; the Research Manager,
+which sets the rating, reads it.
 """
 
 from __future__ import annotations
@@ -43,6 +44,15 @@ def test_flat_book_says_no_position_rather_than_omitting_it():
 def test_a_ticker_held_under_another_spelling_is_matched():
     text = PortfolioContext.model_validate({"positions": [{"ticker": "aapl", "quantity": 5}]}).render("AAPL")
     assert "No current position" not in text and "5" in text
+
+
+@pytest.mark.unit
+def test_rating_effects_follow_the_book_in_the_render():
+    book = PortfolioContext.model_validate({**HOLDING, "rating_effects": {"Hold": "moves the stop",
+                                                                          "Sell": "closes all of it"}})
+    text = book.render("AAPL")
+    assert text.index("120") < text.index("- Hold: moves the stop") < text.index("- Sell: closes all of it")
+    assert "What each rating does" not in PortfolioContext.model_validate(HOLDING).render("AAPL")
 
 
 @pytest.mark.unit
@@ -111,6 +121,7 @@ def test_checkpoint_signature_changes_with_the_portfolio(tmp_path):
 
 @pytest.mark.unit
 @pytest.mark.parametrize("module, factory", [
+    ("tradingagents.agents.managers.research_manager", "create_research_manager"),
     ("tradingagents.agents.trader.trader", "create_trader"),
     ("tradingagents.agents.managers.portfolio_manager", "create_portfolio_manager"),
     ("tradingagents.agents.risk_mgmt.aggressive_debator", "create_aggressive_debator"),
@@ -188,14 +199,12 @@ def test_completed_run_clears_the_checkpoint_it_wrote(tmp_path, monkeypatch):
 
 
 @pytest.mark.unit
-def test_research_layer_sizes_against_a_standard_allocation():
-    """The research team is blind to the book, so its plan cannot promise
-    position-relative sizing: it sizes against a standard allocation instead."""
+def test_research_plan_sizes_against_the_book_or_a_standard_allocation():
+    """The Research Manager reads the book when given one; without it, a standard allocation."""
     from tradingagents.agents.schemas import ResearchPlan
 
     description = ResearchPlan.model_fields["strategic_actions"].description
-    assert "standard allocation" in description
-    assert "does not see the caller's holdings" in description
+    assert "portfolio context" in description and "standard allocation" in description
 
 
 @pytest.mark.unit

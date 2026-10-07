@@ -4,7 +4,8 @@ Optional input to a run: what is held, at what average price, and how much cash
 is free. Without it the agents cannot tell adding to a full position from
 opening a new one. Three states are distinct and must stay so: a position, a
 flat book, and no context at all, since treating "not provided" as "flat" would
-invent a fact about the caller's account.
+invent a fact about the caller's account. The caller may also say what it does
+with each rating given this book, since that varies by caller and by holding.
 
 Broker-neutral by construction: quantities are generic units and the currency is
 whatever label the caller passes, so nothing here implies a venue or an
@@ -30,6 +31,10 @@ class PortfolioContext(BaseModel):
     cash: float | None = Field(default=None, description="Free cash available")
     currency: str | None = Field(default=None, description="Currency label for cash and prices")
     positions: list[Position] = Field(default_factory=list)
+    rating_effects: dict[str, str] = Field(
+        default_factory=dict,
+        description="What the caller does with each rating given this book, by rating name",
+    )
 
     def position_in(self, ticker: str) -> Position | None:
         return next((p for p in self.positions if p.ticker.upper() == ticker.strip().upper()), None)
@@ -48,7 +53,14 @@ class PortfolioContext(BaseModel):
         others = [p for p in self.positions if p is not held]
         if others:
             lines.append("- Other positions: " + ", ".join(f"{p.ticker.upper()} {p.quantity:,.4g}" for p in others))
-        return "Portfolio at the analysis date:\n" + "\n".join(lines)
+        text = "Portfolio at the analysis date:\n" + "\n".join(lines)
+        if self.rating_effects:
+            text += (
+                "\n\nWhat each rating does with this book (the caller acts on your rating exactly so; "
+                "where this differs from the generic rating scale, this is what your rating will do):\n"
+                + "\n".join(f"- {rating}: {effect}" for rating, effect in self.rating_effects.items())
+            )
+        return text
 
     def fingerprint(self) -> str:
         """Stable digest of the book, so a changed one cannot resume a stale run."""
