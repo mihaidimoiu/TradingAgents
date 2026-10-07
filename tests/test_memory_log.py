@@ -760,6 +760,8 @@ class TestPortfolioManagerInjection:
         pm_node(state)
         assert "Lessons from prior decisions and outcomes" in captured["prompt"]
         assert "Great call." in captured["prompt"]
+        # A recalled rating is labelled as a past call, so the judge does not anchor on it.
+        assert "a rating in them is a past call" in captured["prompt"]
 
     def test_pm_no_past_context_no_section(self):
         """PM prompt omits the lessons section entirely when past_context is empty."""

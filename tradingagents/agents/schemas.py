@@ -255,8 +255,9 @@ class PortfolioDecision(BaseModel):
     investment_thesis: str = Field(
         description=(
             "Detailed reasoning anchored in specific evidence from the analysts' "
-            "debate. If prior lessons are referenced in the prompt context, "
-            "incorporate them; otherwise rely solely on the current analysis."
+            "debate. If prior lessons are in the prompt context, use what their "
+            "outcomes teach, not the ratings they record; otherwise rely solely "
+            "on the current analysis."
         ),
     )
     price_target: float | None = Field(
