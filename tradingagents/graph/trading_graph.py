@@ -386,7 +386,17 @@ class TradingAgentsGraph:
             asset_type=asset_type,
             instrument_context=self.resolve_instrument_context(company_name, asset_type, trade_date),
             portfolio_context=portfolio.render(company_name) if portfolio is not None else "",
+            evidence_digest=self.evidence_digest(company_name, trade_date),
         )
+
+    def evidence_digest(self, ticker: str, trade_date: str) -> str:
+        """An index of the run's evidence for the Research Manager and Portfolio Manager; none by default.
+
+        A caller that builds its evidence before the run overrides this, so the
+        judges can check the debate's claims and cited ids against what the
+        evidence says, not only against what the debaters said it says.
+        """
+        return ""
 
     def _memory_step(self, state):
         """The graph's Memory Log step, alongside the analysts (#1428): settle every

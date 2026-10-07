@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tradingagents.agents.context import (
+    get_evidence_digest_from_state,
     get_instrument_context_from_state,
     get_language_instruction,
     get_portfolio_context_from_state,
@@ -45,7 +46,7 @@ The debate always contains conflicting arguments; deciding which side is stronge
 
 ---
 
-**Debate History:**
+{get_evidence_digest_from_state(state)}**Debate History:**
 {history}
 
 ## Output
