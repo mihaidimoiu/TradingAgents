@@ -120,9 +120,8 @@ class ResearchPlan(BaseModel):
     strategic_actions: str = Field(
         description=(
             "Concrete steps for the trader to implement the recommendation, "
-            "including sizing guidance relative to a standard allocation. The "
-            "research team does not see the caller's holdings; the trader and "
-            "portfolio manager apply the actual position."
+            "applied to the portfolio context in the prompt, or relative to a "
+            "standard allocation when none is provided."
         ),
     )
 
