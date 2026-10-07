@@ -180,3 +180,6 @@ def test_the_sentiment_prompt_names_the_subreddits_searched(monkeypatch):
     text = _prompt_text(captured["prompt"])
     assert "r/Bitcoin, r/CryptoCurrency, r/CryptoMarkets" in text
     assert "wallstreetbets" not in text
+    # The news block is whatever the run's sources gave: never vouched for as institutional or fact-driven.
+    assert "Yahoo Finance" not in text and "Institutional framing" not in text
+    assert "read promotional language as a reason for doubt" in text
