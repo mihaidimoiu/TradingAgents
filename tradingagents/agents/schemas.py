@@ -240,10 +240,10 @@ class PortfolioDecision(BaseModel):
         default=None,
         description=(
             "How likely the rating is to prove right over the time horizon, as a "
-            "whole-number percentage from 0 to 100. Calibrate it: 50 is a coin "
-            "flip, 60-70 a clear but contested edge, above 80 only when the "
-            "evidence is strong and nearly one-sided. It is a probability, not "
-            "a restatement of how firmly the rating is worded."
+            "whole-number percentage from 0 to 100, where 50 is a coin flip. "
+            "Estimate it from how decisively this run's evidence supports the "
+            "rating, not from a typical or example value. It is a probability, "
+            "not a restatement of how firmly the rating is worded."
         ),
     )
     executive_summary: str = Field(

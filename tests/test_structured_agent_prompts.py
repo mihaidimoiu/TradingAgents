@@ -107,6 +107,20 @@ def test_portfolio_manager_prompt_states_constraint():
 
 
 @pytest.mark.unit
+def test_the_confidence_instruction_names_no_band_to_settle_in():
+    """An example band ("60-70") in the instruction is where stated confidence lands."""
+    import re
+
+    from tradingagents.agents.managers import portfolio_manager
+    from tradingagents.agents.schemas import PortfolioDecision
+
+    texts = [PortfolioDecision.model_fields["confidence"].description,
+             next(line for line in inspect.getsource(portfolio_manager).splitlines() if "**Confidence**" in line)]
+    for text in texts:
+        assert set(re.findall(r"\d+", text)) <= {"0", "50", "100"}, text
+
+
+@pytest.mark.unit
 def test_sentiment_prompt_states_constraint(monkeypatch):
     from tradingagents.agents.schemas import SentimentBand, SentimentReport
 
