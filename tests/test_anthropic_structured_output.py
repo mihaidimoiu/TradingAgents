@@ -24,7 +24,7 @@ def _request_kwargs(structured) -> dict:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    "model", ["claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "claude-sonnet-4-5"],
+    "model", ["claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "claude-haiku-4-5"],
 )
 def test_claude_binds_the_schema_as_its_output_format(model):
     llm = AnthropicClient(model=model, api_key="x").get_llm()
