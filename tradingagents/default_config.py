@@ -31,6 +31,7 @@ _ENV_OVERRIDES = {
     # interactive choice, which is skipped when the matching var is set.
     "TRADINGAGENTS_GOOGLE_THINKING_LEVEL":   "google_thinking_level",
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
+    "TRADINGAGENTS_OPENAI_SERVICE_TIER":     "openai_service_tier",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
 }
 
@@ -112,6 +113,7 @@ def build_default_config() -> dict:
         # Provider-specific thinking configuration
         "google_thinking_level": None,      # "high", "minimal", etc.
         "openai_reasoning_effort": None,    # "medium", "high", "low"
+        "openai_service_tier": None,        # "flex" (cheaper, slower), "priority", ...
         "anthropic_effort": None,           # "high", "medium", "low"
         # Sampling temperature, forwarded to every provider when set. None leaves
         # each provider at its own default. Lower values reduce run-to-run
