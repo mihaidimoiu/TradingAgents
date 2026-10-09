@@ -8,9 +8,9 @@ canonical pattern:
    not support structured output (rare; mostly older Ollama models), the
    wrap is skipped and the agent uses free-text generation instead.
 2. At invocation, run the structured call and render the result back to
-   markdown. If the structured call itself fails for any reason
-   (malformed JSON from a weak model, transient provider issue), fall
-   back to a plain ``llm.invoke`` so the pipeline never blocks.
+   markdown. A call that parses to nothing is tried once more; if it fails
+   again, or raises (malformed JSON from a weak model, a provider error),
+   fall back to a plain ``llm.invoke`` so the pipeline never blocks.
 
 Centralising the pattern here keeps the agent factories small and ensures
 all three agents log the same warnings when fallback fires.
@@ -28,11 +28,11 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
-# Schema-only structured output binds exactly one tool (the schema itself), so a
-# model that reaches for a search tool emits an unknown tool call and the whole
-# structured attempt is discarded for a free-text retry. Agents on this path
-# state the constraint explicitly rather than relying on the binding alone
-# (#1130).
+# Structured output offers the model no tools beyond the schema (bound as the one
+# tool, or for Claude as the response format), so a model that reaches for a
+# search tool fails the structured attempt and costs a free-text retry. Agents on
+# this path state the constraint explicitly rather than relying on the binding
+# alone (#1130).
 NO_EXTERNAL_TOOLS = (
     "Use only the evidence provided in this prompt. Do not call external tools "
     "or search the web; if something is missing, say so explicitly."
@@ -68,10 +68,16 @@ def invoke_structured(structured_llm: Any | None, prompt: Any, agent_name: str) 
     try:
         result = structured_llm.invoke(prompt)
         if result is None:
-            # A thinking model can answer in plain text instead of calling
-            # the tool, leaving the parser with nothing to return. Treat it
-            # as a structured miss and fall back, with a clear reason.
-            raise ValueError("structured output returned no parsed result")
+            # A thinking model can answer in plain text instead of calling the
+            # schema tool: a sampling miss, which the same prompt usually
+            # recovers from (#1390). An error would repeat, so only this retries.
+            logger.info(
+                "%s: structured output returned no parsed result; retrying the structured call once",
+                agent_name,
+            )
+            result = structured_llm.invoke(prompt)
+        if result is None:
+            raise ValueError("structured output returned no parsed result, twice")
         return result
     except Exception as exc:
         logger.warning(
