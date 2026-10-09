@@ -49,6 +49,12 @@ class NormalizedChatAnthropic(ChatAnthropic):
     def invoke(self, input, config=None, **kwargs):
         return normalize_content(super().invoke(input, config, **kwargs))
 
+    # LangChain's default is a forced tool call, which Opus 5.5, Sonnet 5.5 and
+    # Fable 5.1 refuse and no Claude model takes with thinking on; it then sends
+    # the schema as an optional tool the model may answer around in prose.
+    def with_structured_output(self, schema, *, method="json_schema", **kwargs):
+        return super().with_structured_output(schema, method=method, **kwargs)
+
 
 class AnthropicClient(BaseLLMClient):
     """Client for Anthropic Claude models."""
