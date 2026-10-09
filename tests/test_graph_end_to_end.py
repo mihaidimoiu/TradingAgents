@@ -18,7 +18,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.runnables import RunnableLambda
 from pydantic import Field
 
-from tradingagents.agents import context, schemas
+from tradingagents.agents import context, debate_gate, schemas
 from tradingagents.agents.analysts import sentiment_analyst
 from tradingagents.dataflows import router
 from tradingagents.dataflows.vendors.yahoo import market as yahoo_market, snapshot
@@ -120,12 +120,12 @@ def offline(monkeypatch, tmp_path):
     return called
 
 
-def _graph(tmp_path, monkeypatch, model, debug=False, **config):
+def _graph(tmp_path, monkeypatch, model, debug=False, on_debate_gate=None, **config):
     cfg = copy.deepcopy(DEFAULT_CONFIG)
     cfg.update(results_dir=str(tmp_path / "results"), data_cache_dir=str(tmp_path / "cache"),
                memory_log_path=str(tmp_path / "log.md"), **config)
     monkeypatch.setattr(trading_graph, "create_llm_client", lambda **k: _Client(model))
-    return trading_graph.TradingAgentsGraph(config=cfg, debug=debug)
+    return trading_graph.TradingAgentsGraph(config=cfg, debug=debug, on_debate_gate=on_debate_gate)
 
 
 @pytest.mark.unit
@@ -387,3 +387,34 @@ def test_the_memory_step_reads_lessons_as_of_the_trade_date_and_settles_once(tmp
 
     assert asked == ["2026-01-20", "2026-01-20"]
     assert (tmp_path / "log.md").read_text() == log_after_first
+
+
+@pytest.mark.unit
+def test_a_converged_debate_ends_at_the_gate_and_the_verdict_is_heard(tmp_path, monkeypatch, offline):
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-key")
+    monkeypatch.setattr(debate_gate, "system_one", lambda state, questions: {"decision_ready": {"noul": 0.9}})
+    verdicts = []
+    graph = _graph(tmp_path, monkeypatch, ScriptedModel(), on_debate_gate=verdicts.append,
+                   max_debate_rounds=3, jev_debate_gate=True)
+
+    state, _ = graph.propagate("NVDA", TRADE_DATE)
+
+    assert state["investment_debate_state"]["count"] == 2
+    assert verdicts == [debate_gate.DebateGateVerdict(round=1, score=0.9, stop=True)]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("enabled, key", [(False, "test-key"), (True, None)], ids=["off", "no-key"])
+def test_the_gate_is_never_asked_unless_enabled_with_a_key(tmp_path, monkeypatch, offline, enabled, key):
+    if key:
+        monkeypatch.setenv("TYPESAFE_API_KEY", key)
+    else:
+        monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    asked = []
+    monkeypatch.setattr(debate_gate, "system_one", lambda *a: asked.append(a))
+    graph = _graph(tmp_path, monkeypatch, ScriptedModel(), max_debate_rounds=2, jev_debate_gate=enabled)
+
+    state, _ = graph.propagate("NVDA", TRADE_DATE)
+
+    assert state["investment_debate_state"]["count"] == 4
+    assert asked == []

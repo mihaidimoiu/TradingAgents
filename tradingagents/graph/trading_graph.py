@@ -14,6 +14,7 @@ from langgraph.prebuilt import ToolNode
 import tradingagents
 from tradingagents.agents.analysts.sentiment_analyst import SourceFetcher, fetch_sentiment_sources
 from tradingagents.agents.context import build_instrument_context, resolve_instrument_identity
+from tradingagents.agents.debate_gate import DebateGateVerdict, jev_debate_gate
 from tradingagents.agents.rating import run_rating
 from tradingagents.dataflows.config import run_config, run_config_context
 from tradingagents.dataflows.date_window import get_current_date, is_historical
@@ -70,6 +71,7 @@ class TradingAgentsGraph:
         tool_nodes: Mapping[str, ToolNode] | None = None,
         credit_fallbacks: Mapping[tuple[str, str], tuple[str, str]] | None = None,
         on_fallback: Callable[[str], None] | None = None,
+        on_debate_gate: Callable[[DebateGateVerdict], None] | None = None,
     ):
         """Initialize the trading agents graph and components.
 
@@ -88,6 +90,8 @@ class TradingAgentsGraph:
                 answers in its place once that provider has no credit left.
                 Kept out of the config: it is no part of the checkpoint signature.
             on_fallback: Told, once per provider, that it ran out and was replaced.
+            on_debate_gate: Told each judgement of the Jev debate gate, when
+                ``jev_debate_gate`` is on and a TypeSafe key is set.
         """
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
@@ -116,6 +120,7 @@ class TradingAgentsGraph:
         self.conditional_logic = ConditionalLogic(
             max_debate_rounds=self.config["max_debate_rounds"],
             max_risk_discuss_rounds=self.config["max_risk_discuss_rounds"],
+            debate_gate=jev_debate_gate(self.config, on_debate_gate),
         )
         # An analyst takes two graph steps per tool round, plus its first turn
         # and its wrap-up; a limit past the recursion limit would end the run
