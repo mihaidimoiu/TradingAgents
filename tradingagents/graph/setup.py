@@ -223,7 +223,8 @@ def _analyst_graph(spec, agent, max_tool_rounds: int, tools: ToolNode | None = N
                            spec.agent_node, max_tool_rounds, repeated)
         return agent({**state, "messages": [*state["messages"], HumanMessage(WRAP_UP)]})
 
-    graph.add_node("tools", run_tools)
+    # With no budget the tool node is the caller's own, so a caller can still find it in the compiled graph.
+    graph.add_node("tools", run_tools if max_tool_context_chars else node)
     graph.add_node("wrap_up", wrap_up)
     graph.add_conditional_edges("agent", _tools_or_done, ["tools", END])
     graph.add_conditional_edges("tools", more_or_wrap_up, ["agent", "wrap_up"])
