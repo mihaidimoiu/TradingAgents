@@ -137,6 +137,7 @@ class TradingAgentsGraph:
             max_tool_rounds,
             sentiment_sources=sentiment_sources,
             tool_nodes=tool_nodes,
+            max_tool_context_chars=self.config["max_tool_context_chars"],
             role_llms=self.role_llms,
             second_analyst_llm=self._second_analyst_llm(),
         )
