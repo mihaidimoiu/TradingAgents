@@ -13,10 +13,11 @@ Changes that need action when upgrading are listed under "Upgrading from" in the
 - **Double analysts keep the run's config.** Both models' threads run in a copy of the caller's context, so they read the run's vendors, prompt additions and output language, not whatever another run left process-wide.
 - **Building a graph no longer changes other runs.** The constructor stops writing its config process-wide; every run already binds its own.
 - **A `tool_nodes` mapping must cover every analyst with tools.** One left out is refused when the graph is built, instead of quietly calling the live vendors.
-- **A model client copied or unpickled before initialisation** no longer recurses in `CreditFallback.__getattr__`.
+- **A model client copied or unpickled before initialisation** no longer recurses in `ProviderChain.__getattr__`.
 
 ### Added
 
+- `fallbacks` on `TradingAgentsGraph`: each (provider, model) can name stand-ins on other providers, asked in order when a call fails as `classify` reads it (by default only an empty account moves on). `on_fallback` hears each provider taken out of the run and each call moved on, `exhausted` shares who is out with the caller's other clients, and `ChainExhausted` names every provider's error once none answers.
 - `log_states` (default on): turn off the per-run state JSON under `results_dir` when the embedding app keeps its own record.
 - `report_missing(text)`: tells a failed analyst's note from a report, for a caller that stores reports.
 

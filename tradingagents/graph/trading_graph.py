@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -21,7 +21,7 @@ from tradingagents.dataflows.date_window import get_current_date, is_historical
 from tradingagents.dataflows.symbols import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import build_llm_kwargs, create_llm_client, tier_provider
-from tradingagents.llm_clients.fallback import CreditFallback, Exhausted
+from tradingagents.llm_clients.fallback import Classify, Exhausted, ProviderChain, Told, credit_only
 from tradingagents.memory import TradingMemoryLog, settlement
 from tradingagents.memory.reflection import Reflector
 from tradingagents.reporting import write_report_tree
@@ -59,7 +59,7 @@ class TradingAgentsGraph:
     """Main class that orchestrates the trading agents framework."""
 
     # Read-only default, for a graph built without __init__ (as tests do): no fallbacks.
-    credit_fallbacks: Mapping[tuple[str, str], tuple[str, str]] = MappingProxyType({})
+    fallbacks: Mapping[tuple[str, str], Sequence[tuple[str, str]]] = MappingProxyType({})
 
     def __init__(
         self,
@@ -69,9 +69,11 @@ class TradingAgentsGraph:
         callbacks: list | None = None,
         sentiment_sources: SourceFetcher = fetch_sentiment_sources,
         tool_nodes: Mapping[str, ToolNode] | None = None,
-        credit_fallbacks: Mapping[tuple[str, str], tuple[str, str]] | None = None,
-        on_fallback: Callable[[str], None] | None = None,
+        fallbacks: Mapping[tuple[str, str], Sequence[tuple[str, str]]] | None = None,
+        on_fallback: Told | None = None,
         on_debate_gate: Callable[[DebateGateVerdict], None] | None = None,
+        exhausted: Exhausted | None = None,
+        classify: Classify = credit_only,
     ):
         """Initialize the trading agents graph and components.
 
@@ -86,18 +88,26 @@ class TradingAgentsGraph:
             tool_nodes: Per analyst key ("market", "news", "fundamentals"), the
                 node that runs its tool calls instead of the live vendors. Its
                 tools must carry the names and arguments of the analyst's TOOLS.
-            credit_fallbacks: (provider, model) -> the (provider, model) that
-                answers in its place once that provider has no credit left.
-                Kept out of the config: it is no part of the checkpoint signature.
-            on_fallback: Told, once per provider, that it ran out and was replaced.
+            fallbacks: (provider, model) -> the (provider, model)s that answer
+                in its place, in order, as `classify` reads its failures
+                (`llm_clients.fallback`): one per other provider, the first
+                listed; its own provider's are ignored. Kept out of the config:
+                it is no part of the checkpoint signature.
+            on_fallback: Told each provider taken out of the run, and each call
+                moved on (`fallback.Told`); ignored when `exhausted` is given.
+            exhausted: The providers out of the run, shared with the caller's
+                other clients; a new one when None.
+            classify: What a failed call means; by default only an empty
+                account moves on.
             on_debate_gate: Told each judgement of the Jev debate gate, when
                 ``jev_debate_gate`` is on and a TypeSafe key is set.
         """
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
         self.callbacks = callbacks or []
-        self.credit_fallbacks = dict(credit_fallbacks or {})
-        self.exhausted = Exhausted(on_fallback)
+        self.fallbacks = dict(fallbacks or {})
+        self.exhausted = exhausted if exhausted is not None else Exhausted(on_fallback)
+        self.classify = classify
 
         # Not set_config: every run binds this graph's config for itself
         # (propagate, the stream path, settlement). Written process-wide, a
@@ -171,12 +181,17 @@ class TradingAgentsGraph:
         return {role: self._llm(spec["provider"], spec["model"]) for role, spec in plan.items()}
 
     def _llm(self, provider: str, model: str, tier: str | None = None) -> Any:
-        """The client for `provider`/`model`, handing over to its credit fallback when it has one."""
-        backup = self.credit_fallbacks.get((provider, model))
-        if backup is None or backup[0] == provider:
+        """The client for `provider`/`model`, chained to its fallbacks on other providers when it has some."""
+        # One link per provider, its first: a provider is taken out of the run, not a model.
+        stand_ins: dict[str, str] = {}
+        for p, m in self.fallbacks.get((provider, model), ()):
+            if p != provider:
+                stand_ins.setdefault(p, m)
+        if not stand_ins:
             return self._client(provider, model, tier)
-        return CreditFallback(self._client(provider, model, tier), self._client(*backup), provider,
-                              f"{backup[0]}/{backup[1]}", self.exhausted)
+        return ProviderChain([(provider, f"{provider}/{model}", self._client(provider, model, tier)),
+                              *((p, f"{p}/{m}", self._client(p, m)) for p, m in stand_ins.items())],
+                             self.exhausted, self.classify)
 
     def _client(self, provider: str, model: str, tier: str | None = None) -> Any:
         """One chat client per provider, model and endpoint, with that provider's own options.
