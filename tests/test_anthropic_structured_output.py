@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from tradingagents.agents.structured import bind_structured
 from tradingagents.llm_clients.anthropic_client import AnthropicClient
-from tradingagents.llm_clients.fallback import CreditFallback, Exhausted
+from tradingagents.llm_clients.fallback import Exhausted, ProviderChain
 
 
 class Verdict(BaseModel):
@@ -45,11 +45,13 @@ def test_an_explicit_method_is_still_honoured():
 
 
 @pytest.mark.unit
-def test_claude_behind_a_credit_fallback_keeps_its_output_format():
+def test_claude_in_a_provider_chain_keeps_its_output_format():
     claude = AnthropicClient(model="claude-opus-5-5", api_key="x").get_llm()
     backup = AnthropicClient(model="claude-opus-4-8", api_key="x").get_llm()
-    llm = CreditFallback(claude, backup, "anthropic", "anthropic", Exhausted())
+    llm = ProviderChain([("anthropic", "anthropic/claude-opus-5-5", claude),
+                         ("bedrock", "bedrock/claude-opus-4-8", backup)], Exhausted())
 
     structured = bind_structured(llm, Verdict, "Trader")
 
-    assert _request_kwargs(structured.primary)["output_config"]["format"]["type"] == "json_schema"
+    assert all(_request_kwargs(model)["output_config"]["format"]["type"] == "json_schema"
+               for _, _, model in structured.links)
