@@ -46,3 +46,17 @@ def test_a_past_date_withholds_the_live_snapshot(monkeypatch):
     text = earnings.get_earnings_context("AAPL", "2026-08-01")
     assert "withheld" in text and "Next earnings report" not in text
     assert "2026-07-30" in text and "2026-10-29" not in text
+
+
+def test_a_caller_that_dates_the_next_report_itself_can_leave_it_out(monkeypatch):
+    class Ticker:
+        earnings_dates = DATES
+        earnings_estimate = revenue_estimate = eps_trend = eps_revisions = None
+        analyst_price_targets = recommendations_summary = None
+
+    monkeypatch.setattr(earnings.yf, "Ticker", lambda symbol: Ticker())
+    monkeypatch.setattr(earnings, "get_current_date", lambda: "2026-10-23")
+    assert "Next earnings report" in earnings.get_earnings_context("AAPL", "2026-10-23")
+    text = earnings.get_earnings_context("AAPL", "2026-10-23", include_next_report=False)
+    assert "Next earnings report" not in text and "Near earnings" not in text
+    assert "Consensus estimates" in text and "2026-07-30" in text

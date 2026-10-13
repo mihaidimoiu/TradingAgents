@@ -175,6 +175,8 @@ def _fetch(read):
 def get_earnings_context(
     ticker: Annotated[str, "ticker symbol of the company"],
     as_of_date: Annotated[str, "analysis date in YYYY-MM-DD format"] = None,
+    *,
+    include_next_report: Annotated[bool, "False for a caller that dates the next report itself"] = True,
 ) -> str:
     """The next report and whether it is near, consensus and its revisions, price targets, surprises."""
     canonical = normalize_symbol(ticker)
@@ -186,8 +188,9 @@ def get_earnings_context(
 
     sections = [f"# Earnings context for {canonical} (as of {day:%Y-%m-%d})", ""]
     if live:
-        sections += ["## Next earnings report", *next_report(dates, day), "",
-                     "## Consensus estimates (upcoming periods)",
+        if include_next_report:
+            sections += ["## Next earnings report", *next_report(dates, day), ""]
+        sections += ["## Consensus estimates (upcoming periods)",
                      "Periods: 0q this quarter, +1q the next, 0y this fiscal year, +1y the next.",
                      *_estimates(_fetch(lambda: stock.earnings_estimate), "EPS"),
                      *_estimates(_fetch(lambda: stock.revenue_estimate), "Revenue", _money), "",
@@ -198,8 +201,8 @@ def get_earnings_context(
                      "## Analyst price targets (12 months)",
                      *_targets(_fetch(lambda: stock.analyst_price_targets)), ""]
     else:
-        sections += ["The next report date, consensus estimates, their revisions, price targets and analyst "
-                     "counts are withheld: "
+        lead = "The next report date, consensus estimates" if include_next_report else "Consensus estimates"
+        sections += [f"{lead}, their revisions, price targets and analyst counts are withheld: "
                      f"yfinance serves only today's, which postdate {day:%Y-%m-%d}.", ""]
     sections += [f"## Earnings surprises (reported on or before {day:%Y-%m-%d})", *surprises(dates, day)]
     if live:
