@@ -1,12 +1,12 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from tradingagents.agents.analysts.turn import take_turn
+from tradingagents.agents.calculator import RULE, calculate
 from tradingagents.agents.context import (
     get_instrument_context_from_state,
     get_language_instruction,
     get_prompt_extra,
 )
-from tradingagents.agents.calculator import RULE, calculate
 from tradingagents.agents.tools import (
     get_global_news,
     get_macro_indicators,
