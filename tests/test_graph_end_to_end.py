@@ -150,7 +150,7 @@ def test_a_full_run_reaches_a_logged_decision(tmp_path, monkeypatch, offline, st
 
 @pytest.mark.unit
 def test_an_interrupted_run_resumes_from_its_checkpoint(tmp_path, monkeypatch, offline):
-    model = ScriptedModel(fail_at=12)            # past the analysts, before the decision
+    model = ScriptedModel(fail_at=11)            # past the analysts, before the decision
     graph = _graph(tmp_path, monkeypatch, model, checkpoint_enabled=True)
     with pytest.raises(RuntimeError, match="provider unavailable"):
         graph.propagate("NVDA", TRADE_DATE)
@@ -264,9 +264,9 @@ def test_an_analyst_that_keeps_calling_tools_writes_its_report_at_the_limit(tmp_
 
     data = [name for name in model.tool_turns if name != calculate.name]
     assert len(data) == 3 * 3   # three tool-using analysts, three rounds each
-    # Every other agent is offered the calculator and stops at its rounds: bull, bear, the three risk
-    # voices, the research manager, the trader, the portfolio manager and the sentiment analyst.
-    assert model.tool_turns.count(calculate.name) == 9 * ROUNDS
+    # Every other agent is offered the calculator: bull, bear and the three risk voices stop at its rounds;
+    # the research manager, the trader, the portfolio manager and the sentiment analyst calculate in one call.
+    assert model.tool_turns.count(calculate.name) == 5 * ROUNDS + 4
     for key in ("market_report", "news_report", "fundamentals_report"):
         assert final_state[key] == TEXT
     assert rating == "Overweight"

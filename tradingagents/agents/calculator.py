@@ -3,8 +3,8 @@
 Pure arithmetic over what the model writes: it reads no data, so a run is as reproducible with it as
 without. An analyst that already calls tools is offered it beside them (its ``TOOLS``); an agent that
 answers in one call gets up to ``ROUNDS`` rounds of it first (``invoke_calculating``); one that answers
-in a schema makes its calculations before the structured call (``with_calculations``), since that call
-offers no tool but the schema.
+in a schema makes its calculations in one call before the structured one (``with_calculations``), since
+that call offers no tool but the schema.
 """
 
 from __future__ import annotations
@@ -34,10 +34,10 @@ RULE = (
     "tool: put all of a turn's expressions in one call, then quote its results exactly."
 )
 WRAP_UP = "Your calculator rounds are spent. Write your answer now from the results above."
-# Before an answer in a schema, which offers no tool: the calculations first, then a bare acknowledgement.
+# Before an answer in a schema, which offers no tool: every calculation in one call, or a bare acknowledgement.
 FIRST = (
-    "\n\nBefore answering, make every calculation your answer will need with `calculate`, all in one call. "
-    "Once none is left, reply with the single word DONE; do not write the answer yet."
+    "\n\nBefore answering, make every calculation your answer will need with `calculate`, all in this one "
+    "call: there is no second. With none to make, reply with the single word DONE. Do not write the answer yet."
 )
 
 
@@ -171,20 +171,14 @@ def invoke_calculating(llm: Any, prompt: Any) -> BaseMessage:
 
 def with_calculations(llm: Any, prompt: Any) -> Any:
     """`prompt` with the calculator's results appended: an answer in a schema, which offers no tool, quotes
-    them. `prompt` unchanged when the model makes none."""
+    them. One call, its sums all at once: a second round would cost a call that mostly only says it is done.
+    `prompt` unchanged when the model makes none."""
     if (bound := _offered(llm)) is None:
         return prompt
-    messages = _messages(prompt, RULE + FIRST)
-    results: list[str] = []
-    for _ in range(ROUNDS):
-        reply = bound.invoke(messages)
-        if not reply.tool_calls:
-            break
-        said = answers(reply)
-        # Only the calculator's sums are quoted; a call it told off is for the model alone.
-        results += [str(message.content) for call, message in zip(reply.tool_calls, said, strict=True)
-                    if call["name"] == calculate.name and isinstance(call["args"].get("expressions"), list)]
-        messages = [*messages, reply, *said]
+    reply = bound.invoke(_messages(prompt, RULE + FIRST))
+    # Only the calculator's sums are quoted: a call to another tool, or with no expressions, is dropped.
+    results = [str(message.content) for call, message in zip(reply.tool_calls, answers(reply), strict=True)
+               if call["name"] == calculate.name and isinstance(call["args"].get("expressions"), list)]
     if not results:
         return prompt
     block = "Your calculator results; quote these figures exactly:\n" + "\n".join(results)
