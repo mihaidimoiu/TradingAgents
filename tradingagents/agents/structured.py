@@ -24,6 +24,8 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
+from tradingagents.agents.calculator import with_calculations
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
@@ -94,7 +96,9 @@ def invoke_structured_or_freetext(
     render: Callable[[T], str],
     agent_name: str,
 ) -> str:
-    """Run the structured call and render to markdown; fall back to free-text on any failure."""
+    """Run the structured call and render to markdown; fall back to free-text on any failure. Its arithmetic is
+    made first, on the calculator (`with_calculations`), since the structured call offers no tool."""
+    prompt = with_calculations(plain_llm, prompt)
     result = invoke_structured(structured_llm, prompt, agent_name)
     if result is not None:
         return render(result)

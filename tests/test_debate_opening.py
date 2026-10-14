@@ -27,9 +27,13 @@ _REPORTS = {
 
 
 def _capturing_llm(captured: dict):
+    """A model that answers at once, offered the calculator or not; the prompt it read, as text."""
     llm = MagicMock()
+    llm.bind_tools.return_value = llm
     llm.invoke.side_effect = lambda prompt: (
-        captured.__setitem__("prompt", prompt) or MagicMock(content="argument")
+        captured.__setitem__("prompt", prompt if isinstance(prompt, str)
+                             else "\n".join(str(m.content) for m in prompt))
+        or MagicMock(content="argument", tool_calls=[])
     )
     return llm
 

@@ -1,3 +1,4 @@
+from tradingagents.agents.calculator import invoke_calculating
 from tradingagents.agents.context import (
     get_instrument_context_from_state,
     get_language_instruction,
@@ -60,7 +61,7 @@ Here is the last response from the aggressive analyst: {current_aggressive_respo
 
 Engage actively by analyzing both sides critically, addressing weaknesses in the aggressive and conservative arguments to advocate for a more balanced approach. Challenge each of their points to illustrate why a moderate risk strategy might offer the best of both worlds, providing growth potential while safeguarding against extreme volatility. Focus on debating rather than simply presenting data, aiming to show that a balanced view can lead to the most reliable outcomes. Output conversationally as if you are speaking without any special formatting.""" + get_language_instruction() + get_prompt_extra("neutral_debator")
 
-        response = llm.invoke(prompt)
+        response = invoke_calculating(llm, prompt)
 
         argument = f"Neutral Analyst: {response.content}"
 

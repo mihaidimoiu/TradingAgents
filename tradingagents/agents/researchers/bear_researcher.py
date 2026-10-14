@@ -1,3 +1,4 @@
+from tradingagents.agents.calculator import invoke_calculating
 from tradingagents.agents.context import (
     get_instrument_context_from_state,
     get_language_instruction,
@@ -66,7 +67,7 @@ Last bull argument: {current_response}
 Use this information to deliver a compelling bear argument, refute the bull's claims, and engage in a dynamic debate that demonstrates the risks and weaknesses of investing in the {target_label}.
 """ + get_language_instruction() + get_prompt_extra("bear_researcher")
 
-        response = llm.invoke(prompt)
+        response = invoke_calculating(llm, prompt)
 
         argument = f"Bear Analyst: {response.content}"
 
