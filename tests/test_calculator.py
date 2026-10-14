@@ -76,12 +76,14 @@ def test_calculator_rounds_are_capped_and_the_last_turn_offers_no_tool():
 
 
 @pytest.mark.unit
-def test_an_answer_in_a_schema_gets_its_results_in_its_prompt_and_none_unchanged():
-    assert with_calculations(_model(_sums(1), AIMessage(content="DONE")), "decide") == (
+def test_an_answer_in_a_schema_gets_its_results_in_its_prompt_from_one_call_and_none_unchanged():
+    llm = _model(_sums(1), _sums(2))
+    assert with_calculations(llm, "decide") == (
         "decide\n\nYour calculator results; quote these figures exactly:\n6 * 7 = 42")
+    assert llm.bind_tools.return_value.invoke.call_count == 1
     assert with_calculations(_model(AIMessage(content="DONE")), "decide") == "decide"
     stray = AIMessage(content="", tool_calls=[{"name": "get_news", "id": "s", "args": {}}])
-    assert with_calculations(_model(stray, AIMessage(content="DONE")), "decide") == "decide"
+    assert with_calculations(_model(stray), "decide") == "decide"
 
 
 @pytest.mark.unit
