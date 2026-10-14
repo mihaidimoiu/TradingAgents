@@ -21,13 +21,13 @@ def take_turn(prompt, llm, tools, messages):
         # The prompt lists the tools it offers; a model told of tools it cannot
         # call may still try, and some providers then answer with nothing.
         prompt = prompt.partial(tool_names="none; your tool rounds are spent")
-        result = (prompt | llm).invoke(_as_text(messages))
+        result = (prompt | llm).invoke(as_text(messages))
         return result, result.content
     result = (prompt | llm.bind_tools(tools)).invoke(messages)
     return result, "" if result.tool_calls else result.content
 
 
-def _as_text(messages):
+def as_text(messages):
     """The history with its tool calls and tool results written out as plain messages."""
     written = []
     for message in messages:

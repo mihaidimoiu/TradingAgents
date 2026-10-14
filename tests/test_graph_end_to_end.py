@@ -20,6 +20,7 @@ from pydantic import Field
 
 from tradingagents.agents import context, debate_gate, schemas
 from tradingagents.agents.analysts import sentiment_analyst
+from tradingagents.agents.calculator import ROUNDS, calculate
 from tradingagents.dataflows import router
 from tradingagents.dataflows.vendors.yahoo import market as yahoo_market, snapshot
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -245,8 +246,8 @@ class LoopingModel(ScriptedModel):
         if not self.tools:
             self.last_turns.append(messages)
             return super()._generate(messages, stop, run_manager, **kwargs)
-        self.tool_turns.append(1)
         tool = self.tools[0]
+        self.tool_turns.append(tool.name)
         call = {"name": tool.name, "id": f"call_{len(self.tool_turns)}",
                 "args": {k: v for k, v in ARGS.items()
                          if k in tool.tool_call_schema.model_json_schema()["properties"]}}
@@ -261,7 +262,11 @@ def test_an_analyst_that_keeps_calling_tools_writes_its_report_at_the_limit(tmp_
 
     final_state, rating = graph.propagate("NVDA", TRADE_DATE)
 
-    assert len(model.tool_turns) == 3 * 3   # three tool-using analysts, three rounds each
+    data = [name for name in model.tool_turns if name != calculate.name]
+    assert len(data) == 3 * 3   # three tool-using analysts, three rounds each
+    # Every other agent is offered the calculator and stops at its rounds: bull, bear, the three risk
+    # voices, the research manager, the trader, the portfolio manager and the sentiment analyst.
+    assert model.tool_turns.count(calculate.name) == 9 * ROUNDS
     for key in ("market_report", "news_report", "fundamentals_report"):
         assert final_state[key] == TEXT
     assert rating == "Overweight"
@@ -306,7 +311,7 @@ def test_a_full_tool_context_budget_wraps_the_analyst_up_early(tmp_path, monkeyp
         assert final_state[key] == TEXT
     # The budget, not the rounds, ended each analyst: every tool-using analyst
     # wrapped up long before its 20 rounds (3 x 20 tool turns) were spent.
-    assert len(model.tool_turns) < 12
+    assert len([name for name in model.tool_turns if name != calculate.name]) < 12
     assert sum("filled its 50-char tool-result budget" in r.message for r in caplog.records) == 3
     wrap_ups = [h for h in model.last_turns if isinstance(h[-1], HumanMessage) and "tool round" in h[-1].content]
     assert len(wrap_ups) == 3
