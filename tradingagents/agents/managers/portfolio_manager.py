@@ -10,6 +10,7 @@ free-text generation and the rating is read from that text.
 
 from __future__ import annotations
 
+from tradingagents.agents.calculator import with_calculations
 from tradingagents.agents.context import (
     get_evidence_digest_from_state,
     get_instrument_context_from_state,
@@ -19,7 +20,6 @@ from tradingagents.agents.context import (
 )
 from tradingagents.agents.rating import parse_rating
 from tradingagents.agents.schemas import PortfolioDecision, render_pm_decision
-from tradingagents.agents.calculator import with_calculations
 from tradingagents.agents.structured import NO_EXTERNAL_TOOLS, bind_structured, invoke_structured
 
 

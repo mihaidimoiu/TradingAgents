@@ -6,7 +6,12 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from tradingagents.agents import calculator
-from tradingagents.agents.calculator import calculate, evaluate, invoke_calculating, with_calculations
+from tradingagents.agents.calculator import (
+    calculate,
+    evaluate,
+    invoke_calculating,
+    with_calculations,
+)
 
 
 @pytest.mark.unit
