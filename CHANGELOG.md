@@ -22,7 +22,7 @@ Changes that need action when upgrading are listed under "Upgrading from" in the
 - `report_missing(text)`: tells a failed analyst's note from a report, for a caller that stores reports.
 - **A calculator for every agent.** Each agent is told to work every sum, ratio, percentage and growth rate on the `calculate` tool rather than in its head: exact arithmetic over what the model writes (`pct`, `change` and `cagr` among its functions), reading no data, so a run is as reproducible as before. The tool-using analysts are offered it beside their data tools; the researchers and risk debaters get up to three calculator rounds before answering (`invoke_calculating`); the agents that answer in a schema make their calculations first, in one call, and quote them (`with_calculations`). A model that binds no tools answers as before.
 
-### Upgrading from 0.6.0
+### Upgrading from 0.7.0
 
 - A `tool_nodes` mapping should offer `calculate` beside an analyst's data tools: its prompt names it.
 - The terminal UI's dependencies (typer, questionary, rich) moved to the `cli` extra: install `pip install ".[cli]"` for the `tradingagents` command. A library install no longer pulls them.
