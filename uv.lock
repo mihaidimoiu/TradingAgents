@@ -6,10 +6,10 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version < '3.12' and sys_platform == 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
-    "python_full_version < '3.12' and sys_platform == 'emscripten'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.12' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and sys_platform == 'emscripten'",
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
@@ -2210,6 +2210,7 @@ wheels = [
 name = "tradingagents"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
     { name = "langchain-google-genai" },
@@ -2217,6 +2218,7 @@ dependencies = [
     { name = "langgraph" },
     { name = "langgraph-checkpoint-sqlite" },
     { name = "markdown-it-py" },
+    { name = "packaging" },
     { name = "pandas" },
     { name = "python-dotenv" },
     { name = "pytz" },
@@ -2243,6 +2245,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=42.0" },
     { name = "langchain-anthropic", specifier = ">=1.7.4" },
     { name = "langchain-aws", marker = "extra == 'bedrock'", specifier = ">=1.7.9" },
     { name = "langchain-core", specifier = ">=1.6.5" },
@@ -2251,6 +2254,7 @@ requires-dist = [
     { name = "langgraph", specifier = ">=1.2.12" },
     { name = "langgraph-checkpoint-sqlite", specifier = ">=3.1.1" },
     { name = "markdown-it-py", specifier = ">=4.0" },
+    { name = "packaging", specifier = ">=24.0" },
     { name = "pandas", specifier = ">=3.0.6" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-subtests", marker = "extra == 'dev'", specifier = ">=0.13" },
