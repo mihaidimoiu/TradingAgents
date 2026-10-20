@@ -139,6 +139,12 @@ def build_llm_kwargs(config: dict) -> dict[str, Any]:
         key = "max_output_tokens" if provider == "google" else "max_tokens"
         kwargs[key] = _coerce_max_tokens(max_tokens)
 
+    # The caller's key for this provider (``api_key_for``: a callable, provider -> key or None, so a dumped
+    # config shows no key), ahead of the environment's; None leaves the client on the environment's.
+    key_for = config.get("api_key_for")
+    if key_for is not None and (api_key := key_for(provider)):
+        kwargs["api_key"] = api_key
+
     return kwargs
 
 
