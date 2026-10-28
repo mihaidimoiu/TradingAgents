@@ -78,6 +78,12 @@ def evaluate(expression: str) -> float:
         raise ValueError(f"not an expression ({error.msg})") from None
     try:
         value = _value(tree.body)
+    # Named in our words: Python's differ by version ("float division by zero" before 3.14) and the
+    # overflow's by platform (the C library's errno text).
+    except ZeroDivisionError:
+        raise ValueError("division by zero") from None
+    except OverflowError:
+        raise ValueError("too large") from None
     except (ArithmeticError, TypeError) as error:
         raise ValueError(str(error) or type(error).__name__) from None
     if isinstance(value, complex) or not math.isfinite(value):
