@@ -36,6 +36,8 @@ cli = [
     "typer>=0.21.0",
 ]
 dev = [
+    # The suite exercises the terminal UI too.
+    "tradingagents[cli]",
     "ruff>=0.16",
     "pytest>=8.0",
     "pytest-subtests>=0.13",
