@@ -1,7 +1,7 @@
 """FRED (Federal Reserve Economic Data) macro vendor.
 
 Fetches macroeconomic time series — policy rates, Treasury yields, inflation,
-labor, growth — from the St. Louis Fed's free API. Used by the news analyst to
+labor, growth — from the St. Louis Fed's free API. Used by the macro analyst to
 ground macro commentary in actual numbers rather than headlines alone.
 
 A free API key (https://fred.stlouisfed.org/docs/api/api_key.html) is read from

@@ -148,9 +148,11 @@ def test_every_selected_analyst_is_in_progress_until_its_report_lands():
     from cli.display import MessageBuffer, update_analyst_statuses
 
     buffer = MessageBuffer()
-    buffer.init_for_analysis(["market", "news", "fundamentals"])
-    update_analyst_statuses(buffer, {"news_report": "done"})
+    buffer.init_for_analysis(["market", "news", "macro", "fundamentals"])
+    update_analyst_statuses(buffer, {"news_report": "done", "macro_report": "done"})
 
     assert buffer.agent_status["Market Analyst"] == "in_progress"
     assert buffer.agent_status["Fundamentals Analyst"] == "in_progress"
     assert buffer.agent_status["News Analyst"] == "completed"
+    assert buffer.agent_status["Macro Analyst"] == "completed"
+    assert buffer.report_sections["macro_report"] == "done"

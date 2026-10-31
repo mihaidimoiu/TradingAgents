@@ -21,7 +21,7 @@ class _LLM:
 def _state(asset_type: str) -> dict:
     return {
         "asset_type": asset_type, "instrument_context": "EURUSD", "market_report": "M", "sentiment_report": "S",
-        "news_report": "N", "fundamentals_report": "",
+        "news_report": "N", "macro_report": "Mac", "fundamentals_report": "",
         "investment_debate_state": {"history": "", "bull_history": "", "bear_history": "", "current_response": "",
                                     "count": 0},
     }

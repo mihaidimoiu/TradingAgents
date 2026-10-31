@@ -7,6 +7,7 @@ class AnalystType(StrEnum):
     # back-compat; the user-facing label is "Sentiment Analyst".
     SOCIAL = "social"
     NEWS = "news"
+    MACRO = "macro"
     FUNDAMENTALS = "fundamentals"
 
 

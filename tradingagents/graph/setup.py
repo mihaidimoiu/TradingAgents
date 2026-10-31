@@ -16,6 +16,7 @@ from tradingagents.agents import (
     create_bull_researcher,
     create_conservative_debator,
     create_fundamentals_analyst,
+    create_macro_analyst,
     create_market_analyst,
     create_neutral_debator,
     create_news_analyst,
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 # Every role a model can be chosen for (``config["role_llms"]``), and the model
 # it falls back to: the analysts by their plan key.
-QUICK_ROLES = ("market", "social", "news", "fundamentals", "bull", "bear", "trader",
+QUICK_ROLES = ("market", "social", "news", "macro", "fundamentals", "bull", "bear", "trader",
                "aggressive", "conservative", "neutral")
 DEEP_ROLES = ("research_manager", "portfolio_manager")
 ROLES = QUICK_ROLES + DEEP_ROLES
@@ -275,7 +276,7 @@ class GraphSetup:
         return self.deep_thinking_llm if role in DEEP_ROLES else self.quick_thinking_llm
 
     def setup_graph(
-        self, selected_analysts=("market", "social", "news", "fundamentals"), memory_node=None
+        self, selected_analysts=("market", "social", "news", "macro", "fundamentals"), memory_node=None
     ):
         """Set up and compile the agent workflow graph.
 
@@ -284,6 +285,7 @@ class GraphSetup:
                 - "market": Market analyst
                 - "social": Sentiment analyst
                 - "news": News analyst
+                - "macro": Macro analyst
                 - "fundamentals": Fundamentals analyst
             memory_node: Node that settles past decisions and returns the run's
                 ``past_context``. It runs alongside the analysts.
@@ -294,6 +296,7 @@ class GraphSetup:
             "market": create_market_analyst,
             "social": lambda llm: create_sentiment_analyst(llm, sources=self.sentiment_sources),
             "news": create_news_analyst,
+            "macro": create_macro_analyst,
             "fundamentals": create_fundamentals_analyst,
         }
 

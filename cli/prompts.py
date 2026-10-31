@@ -22,6 +22,7 @@ ANALYST_CHOICES = [
     ("Market Analyst", AnalystType.MARKET),
     ("Sentiment Analyst", AnalystType.SOCIAL),
     ("News Analyst", AnalystType.NEWS),
+    ("Macro Analyst", AnalystType.MACRO),
     ("Fundamentals Analyst", AnalystType.FUNDAMENTALS),
 ]
 

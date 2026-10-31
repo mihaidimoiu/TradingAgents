@@ -16,7 +16,16 @@ class AnalystExecutionPlanTests(unittest.TestCase):
 
     def test_rejects_unknown_analyst_keys(self):
         with self.assertRaises(ValueError):
-            build_analyst_execution_plan(["market", "macro"])
+            build_analyst_execution_plan(["market", "options"])
+
+    def test_macro_files_its_own_report_with_the_macro_tools(self):
+        spec = build_analyst_execution_plan(["macro"]).specs[0]
+        self.assertEqual(spec.agent_node, "Macro Analyst")
+        self.assertEqual(spec.report_key, "macro_report")
+        self.assertEqual([t.name for t in spec.tools],
+                         ["get_macro_indicators", "get_prediction_markets", "calculate"])
+        news = build_analyst_execution_plan(["news"]).specs[0]
+        self.assertEqual([t.name for t in news.tools], ["get_news", "get_global_news", "calculate"])
 
     def test_social_key_displays_as_sentiment_analyst(self):
         # The wire key stays "social" for saved-config back-compat, but the

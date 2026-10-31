@@ -36,7 +36,7 @@ def get_language_instruction() -> str:
 
 # The keys ``config["prompt_extra"]`` accepts, one per agent that has a prompt.
 PROMPT_EXTRA_AGENTS = (
-    "market_analyst", "sentiment_analyst", "news_analyst", "fundamentals_analyst",
+    "market_analyst", "sentiment_analyst", "news_analyst", "macro_analyst", "fundamentals_analyst",
     "bull_researcher", "bear_researcher", "research_manager", "trader",
     "aggressive_debator", "conservative_debator", "neutral_debator", "portfolio_manager",
 )

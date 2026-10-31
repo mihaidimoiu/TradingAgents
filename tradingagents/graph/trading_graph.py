@@ -63,7 +63,7 @@ class TradingAgentsGraph:
 
     def __init__(
         self,
-        selected_analysts=("market", "social", "news", "fundamentals"),
+        selected_analysts=("market", "social", "news", "macro", "fundamentals"),
         debug=False,
         config: dict[str, Any] = None,
         callbacks: list | None = None,
@@ -85,7 +85,7 @@ class TradingAgentsGraph:
             sentiment_sources: Where the Sentiment Analyst's news, StockTwits and
                 Reddit blocks come from. Fetched live by default; pass a
                 function to serve them from data gathered before the run.
-            tool_nodes: Per analyst key ("market", "news", "fundamentals"), the
+            tool_nodes: Per analyst key ("market", "news", "macro", "fundamentals"), the
                 node that runs its tool calls instead of the live vendors. Its
                 tools must carry the names and arguments of the analyst's TOOLS.
             fallbacks: (provider, model) -> the (provider, model)s that answer
@@ -560,6 +560,7 @@ class TradingAgentsGraph:
             "market_report": final_state["market_report"],
             "sentiment_report": final_state["sentiment_report"],
             "news_report": final_state["news_report"],
+            "macro_report": final_state.get("macro_report", ""),
             "fundamentals_report": final_state["fundamentals_report"],
             "investment_debate_state": {
                 "bull_history": final_state["investment_debate_state"]["bull_history"],

@@ -19,6 +19,7 @@ _AGENTS_DIR = Path(__file__).resolve().parents[1] / "tradingagents" / "agents"
 REPORT_AGENTS = [
     "analysts/market_analyst.py",
     "analysts/news_analyst.py",
+    "analysts/macro_analyst.py",
     "analysts/fundamentals_analyst.py",
     "analysts/sentiment_analyst.py",
     "researchers/bull_researcher.py",

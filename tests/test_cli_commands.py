@@ -159,7 +159,7 @@ def test_backtest_shows_each_cell_and_how_to_continue(runner, monkeypatch, tmp_p
 @pytest.mark.unit
 @pytest.mark.parametrize("args, analysts", [
     pytest.param(["--analysts", "sentiment,market"], ["market", "social"], id="named_as_in_analyze"),
-    pytest.param(["--asset-type", "crypto"], ["market", "social", "news"], id="crypto_default"),
+    pytest.param(["--asset-type", "crypto"], ["market", "social", "news", "macro"], id="crypto_default"),
 ])
 def test_backtest_takes_its_analysts_as_an_analysis_does(runner, monkeypatch, tmp_path, args, analysts):
     swept = []

@@ -52,6 +52,7 @@ _SECTIONS = (
         ("Market Analyst", "market.md", ("market_report",)),
         ("Sentiment Analyst", "sentiment.md", ("sentiment_report",)),
         ("News Analyst", "news.md", ("news_report",)),
+        ("Macro Analyst", "macro.md", ("macro_report",)),
         ("Fundamentals Analyst", "fundamentals.md", ("fundamentals_report",)),
     )),
     ("II. Research Team Decision", "2_research", (

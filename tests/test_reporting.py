@@ -14,6 +14,7 @@ def _state():
     return {
         "market_report": "MKT",
         "news_report": "NEWS",
+        "macro_report": "MACRO",
         "investment_debate_state": {"bull_history": "BULL"},
         "investment_plan": "RM PLAN",
         "trader_investment_plan": "TRADE",
@@ -33,12 +34,14 @@ def test_write_report_tree_creates_files(tmp_path):
     assert out.name == "complete_report.md"
     assert (tmp_path / "1_analysts" / "market.md").read_text() == "MKT"
     assert (tmp_path / "1_analysts" / "news.md").read_text() == "NEWS"
+    assert (tmp_path / "1_analysts" / "macro.md").read_text() == "MACRO"
     assert (tmp_path / "2_research" / "manager.md").read_text() == "RM PLAN"
     assert (tmp_path / "3_trading" / "trader.md").read_text() == "TRADE"
     assert (tmp_path / "5_portfolio" / "decision.md").read_text() == "PM DECISION"
     complete = out.read_text()
     assert "Trading Analysis Report: AAPL" in complete
     assert "MKT" in complete and "PM DECISION" in complete
+    assert complete.index("NEWS") < complete.index("MACRO") < complete.index("BULL")
 
 
 @pytest.mark.unit
@@ -62,13 +65,14 @@ def test_save_reports_replaces_previous_run_sections(tmp_path, empty_value):
         "trade_date": "2026-09-23",
         "market_report": "NEW MARKET",
         "news_report": empty_value,
+        "macro_report": empty_value,
         "investment_debate_state": {"bull_history": empty_value},
     }
     out = TradingAgentsGraph.save_reports(graph, second, "AAPL", save_path=tmp_path)
 
     assert (tmp_path / "1_analysts" / "market.md").read_text() == "NEW MARKET"
     for filename in (
-        "1_analysts/news.md", "2_research/bull.md", "2_research/manager.md",
+        "1_analysts/news.md", "1_analysts/macro.md", "2_research/bull.md", "2_research/manager.md",
         "3_trading/trader.md", "4_risk/neutral.md", "5_portfolio/decision.md",
     ):
         assert not (tmp_path / filename).exists()

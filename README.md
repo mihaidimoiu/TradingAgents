@@ -82,7 +82,8 @@ Our framework decomposes complex trading tasks into specialized roles.
 ### Analyst Team
 - Fundamentals Analyst: Evaluates company financials and performance metrics, identifying intrinsic values and potential red flags.
 - Sentiment Analyst: Aggregates news headlines, StockTwits, and Reddit chatter into a single sentiment read to gauge short-term market mood.
-- News Analyst: Monitors global news and macroeconomic indicators, interpreting the impact of events on market conditions.
+- News Analyst: Monitors company and world news, interpreting the impact of events on market conditions.
+- Macro Analyst: Reads the policy path, inflation, growth, credit, rates, the dollar and volatility from FRED and prediction markets, and says which of them bear on the instrument and in which direction.
 - Technical Analyst: Utilizes technical indicators (like MACD and RSI) to detect trading patterns and forecast price movements.
 
 The selected analysts work at the same time, each on its own tools, and the research debate starts once all of their reports are in.

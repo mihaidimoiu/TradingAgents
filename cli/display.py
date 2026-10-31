@@ -37,6 +37,7 @@ class MessageBuffer:
         "market": "Market Analyst",
         "social": "Sentiment Analyst",
         "news": "News Analyst",
+        "macro": "Macro Analyst",
         "fundamentals": "Fundamentals Analyst",
     }
 
@@ -47,6 +48,7 @@ class MessageBuffer:
         "market_report": ("market", "Market Analyst"),
         "sentiment_report": ("social", "Sentiment Analyst"),
         "news_report": ("news", "News Analyst"),
+        "macro_report": ("macro", "Macro Analyst"),
         "fundamentals_report": ("fundamentals", "Fundamentals Analyst"),
         "investment_plan": (None, "Research Manager"),
         "trader_investment_plan": (None, "Trader"),
@@ -144,6 +146,7 @@ class MessageBuffer:
                 "market_report": "Market Analysis",
                 "sentiment_report": "Social Sentiment",
                 "news_report": "News Analysis",
+                "macro_report": "Macro Analysis",
                 "fundamentals_report": "Fundamentals Analysis",
                 "investment_plan": "Research Team Decision",
                 "trader_investment_plan": "Trading Team Plan",
@@ -213,6 +216,7 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
             "Market Analyst",
             "Sentiment Analyst",
             "News Analyst",
+            "Macro Analyst",
             "Fundamentals Analyst",
         ],
         "Research Team": ["Bull Researcher", "Bear Researcher", "Research Manager"],
@@ -389,6 +393,8 @@ def display_complete_report(final_state):
         analysts.append(("Sentiment Analyst", final_state["sentiment_report"]))
     if final_state.get("news_report"):
         analysts.append(("News Analyst", final_state["news_report"]))
+    if final_state.get("macro_report"):
+        analysts.append(("Macro Analyst", final_state["macro_report"]))
     if final_state.get("fundamentals_report"):
         analysts.append(("Fundamentals Analyst", final_state["fundamentals_report"]))
     if analysts:
@@ -445,12 +451,13 @@ def update_research_team_status(status):
 
 
 # Ordered list of analysts for status transitions
-ANALYST_ORDER = ["market", "social", "news", "fundamentals"]
+ANALYST_ORDER = ["market", "social", "news", "macro", "fundamentals"]
 
 ANALYST_AGENT_NAMES = {
     "market": "Market Analyst",
     "social": "Sentiment Analyst",
     "news": "News Analyst",
+    "macro": "Macro Analyst",
     "fundamentals": "Fundamentals Analyst",
 }
 
@@ -458,6 +465,7 @@ ANALYST_REPORT_MAP = {
     "market": "market_report",
     "social": "sentiment_report",
     "news": "news_report",
+    "macro": "macro_report",
     "fundamentals": "fundamentals_report",
 }
 

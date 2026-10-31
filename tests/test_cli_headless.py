@@ -38,8 +38,11 @@ class TestFlagValues:
 
     def test_analysts_are_named_and_checked_against_the_asset(self):
         assert prompts.parse_analysts(" Market, news ", AssetType.STOCK) == [AnalystType.MARKET, AnalystType.NEWS]
-        with pytest.raises(ValueError, match="market, sentiment, news, fundamentals"):
-            prompts.parse_analysts("market,macro", AssetType.STOCK)
+        assert prompts.parse_analysts("fundamentals,macro", AssetType.STOCK) == [
+            AnalystType.MACRO, AnalystType.FUNDAMENTALS]
+        assert prompts.parse_analysts("macro", AssetType.CRYPTO) == [AnalystType.MACRO]
+        with pytest.raises(ValueError, match="market, sentiment, news, macro, fundamentals"):
+            prompts.parse_analysts("market,options", AssetType.STOCK)
         with pytest.raises(ValueError, match="crypto"):
             prompts.parse_analysts("fundamentals", AssetType.CRYPTO)
         with pytest.raises(ValueError, match="at least one"):
@@ -179,7 +182,7 @@ def test_rounds_from_the_environment_do_not_claim_a_depth_was_chosen(monkeypatch
 @pytest.mark.unit
 def test_an_unknown_analyst_error_names_the_analysts_as_users_know_them():
     with pytest.raises(ValueError) as caught:
-        prompts.parse_analysts("macro", AssetType.STOCK)
+        prompts.parse_analysts("options", AssetType.STOCK)
     assert "sentiment" in str(caught.value) and "social" not in str(caught.value)
 
 

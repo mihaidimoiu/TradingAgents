@@ -11,7 +11,7 @@ def test_a_role_left_out_keeps_the_quick_or_deep_model():
     assert setup.llm_for("bear") == "claude"
     assert setup.llm_for("bull") == "quick"
     assert all(setup.llm_for(role) == "deep" for role in DEEP_ROLES)
-    assert set(ROLES) >= {"market", "social", "news", "fundamentals", "bull", "bear",
+    assert set(ROLES) >= {"market", "social", "news", "macro", "fundamentals", "bull", "bear",
                           "research_manager", "portfolio_manager"}
 
 

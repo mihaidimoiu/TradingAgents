@@ -148,9 +148,10 @@ def test_sentiment_prompt_states_constraint(monkeypatch):
 def test_tool_using_analysts_keep_their_date_guidance():
     # The analysts that really do call tools keep the wording that anchors their
     # tool date ranges (#836) — this fix is scoped to no-tool agents.
+    import tradingagents.agents.analysts.macro_analyst as macro
     import tradingagents.agents.analysts.market_analyst as market
     import tradingagents.agents.analysts.news_analyst as news
-    for module in (market, news):
+    for module in (market, news, macro):
         assert "tool-call date ranges" in inspect.getsource(module)
 
 

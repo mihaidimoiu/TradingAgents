@@ -1,7 +1,7 @@
 """Polymarket prediction-market vendor.
 
 Surfaces live, market-implied probabilities for forward-looking events (Fed
-decisions, recession, elections, geopolitics, crypto) to the news analyst, as a
+decisions, recession, elections, geopolitics, crypto) to the macro analyst, as a
 complement to news (what happened) and FRED macro data (where things stand):
 what the crowd actually prices to happen next.
 

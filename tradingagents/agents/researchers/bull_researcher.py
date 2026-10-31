@@ -20,6 +20,7 @@ def create_bull_researcher(llm):
         market_research_report = report_or_absent(state["market_report"], "market")
         sentiment_report = report_or_absent(state["sentiment_report"], "sentiment")
         news_report = report_or_absent(state["news_report"], "news")
+        macro_report = report_or_absent(state.get("macro_report", ""), "macro")
         fundamentals_report = report_or_absent(state["fundamentals_report"], "fundamentals")
         instrument_context = get_instrument_context_from_state(state)
         asset_type = state.get("asset_type", "stock")
@@ -52,6 +53,7 @@ def create_bull_researcher(llm):
 Market research report: {market_research_report}
 Social media sentiment report: {sentiment_report}
 Latest world affairs news: {news_report}
+Macroeconomic report: {macro_report}
 {fundamentals_label}: {fundamentals_report}
 Conversation history of the debate: {history}
 

@@ -25,6 +25,7 @@ def create_aggressive_debator(llm):
         market_research_report = report_or_absent(state["market_report"], "market")
         sentiment_report = report_or_absent(state["sentiment_report"], "sentiment")
         news_report = report_or_absent(state["news_report"], "news")
+        macro_report = report_or_absent(state.get("macro_report", ""), "macro")
         fundamentals_report = report_or_absent(state["fundamentals_report"], "fundamentals")
         instrument_context = get_instrument_context_from_state(state)
         portfolio_context = get_portfolio_context_from_state(state)
@@ -45,6 +46,7 @@ def create_aggressive_debator(llm):
 Market Research Report: {market_research_report}
 Social Media Sentiment Report: {sentiment_report}
 Latest World Affairs Report: {news_report}
+Macroeconomic Report: {macro_report}
 Company Fundamentals Report: {fundamentals_report}
 
 Here is the trader's decision:

@@ -137,7 +137,7 @@ def test_a_full_run_reaches_a_logged_decision(tmp_path, monkeypatch, offline, st
     state, signal = graph.propagate("NVDA", TRADE_DATE)
 
     assert signal == state["final_rating"] == "Overweight"
-    for key in ("market_report", "sentiment_report", "news_report", "fundamentals_report",
+    for key in ("market_report", "sentiment_report", "news_report", "macro_report", "fundamentals_report",
                 "investment_plan", "trader_investment_plan", "final_trade_decision"):
         assert state[key].strip(), key
     tool_methods = {"get_stock_data", "get_indicators", "get_news", "get_global_news",
@@ -208,7 +208,7 @@ def test_each_report_streams_as_soon_as_its_analyst_files_it(tmp_path, monkeypat
     """The main state takes the analysts' reports only when the slowest one is
     done; the CLI shows each report, and stops each clock, as it lands."""
     graph = _graph(tmp_path, monkeypatch, ScriptedModel())
-    reports = ("market_report", "sentiment_report", "news_report", "fundamentals_report")
+    reports = ("market_report", "sentiment_report", "news_report", "macro_report", "fundamentals_report")
 
     first = next(state for _, state in graph.stream_run(graph.create_run_state("NVDA", TRADE_DATE),
                                                         **graph.propagator.get_graph_args())
@@ -263,11 +263,11 @@ def test_an_analyst_that_keeps_calling_tools_writes_its_report_at_the_limit(tmp_
     final_state, rating = graph.propagate("NVDA", TRADE_DATE)
 
     data = [name for name in model.tool_turns if name != calculate.name]
-    assert len(data) == 3 * 3   # three tool-using analysts, three rounds each
+    assert len(data) == 4 * 3   # four tool-using analysts, three rounds each
     # Every other agent is offered the calculator: bull, bear and the three risk voices stop at its rounds;
     # the research manager, the trader, the portfolio manager and the sentiment analyst calculate in one call.
     assert model.tool_turns.count(calculate.name) == 5 * ROUNDS + 4
-    for key in ("market_report", "news_report", "fundamentals_report"):
+    for key in ("market_report", "news_report", "macro_report", "fundamentals_report"):
         assert final_state[key] == TEXT
     assert rating == "Overweight"
 
@@ -282,7 +282,7 @@ def test_the_last_turn_is_offered_no_tools_and_reads_its_tool_results_as_text(tm
     graph.propagate("NVDA", TRADE_DATE)
 
     wrap_ups = [h for h in model.last_turns if isinstance(h[-1], HumanMessage) and "tool round" in h[-1].content]
-    assert len(wrap_ups) == 3
+    assert len(wrap_ups) == 4
     for history in wrap_ups:
         assert not any(isinstance(m, ToolMessage) or getattr(m, "tool_calls", None) for m in history)
         assert any("returned]" in str(m.content) for m in history)
@@ -307,14 +307,14 @@ def test_a_full_tool_context_budget_wraps_the_analyst_up_early(tmp_path, monkeyp
     final_state, rating = graph.propagate("NVDA", TRADE_DATE)
 
     assert rating == "Overweight"
-    for key in ("market_report", "news_report", "fundamentals_report"):
+    for key in ("market_report", "news_report", "macro_report", "fundamentals_report"):
         assert final_state[key] == TEXT
     # The budget, not the rounds, ended each analyst: every tool-using analyst
-    # wrapped up long before its 20 rounds (3 x 20 tool turns) were spent.
-    assert len([name for name in model.tool_turns if name != calculate.name]) < 12
-    assert sum("filled its 50-char tool-result budget" in r.message for r in caplog.records) == 3
+    # wrapped up long before its 20 rounds (4 x 20 tool turns) were spent.
+    assert len([name for name in model.tool_turns if name != calculate.name]) < 16
+    assert sum("filled its 50-char tool-result budget" in r.message for r in caplog.records) == 4
     wrap_ups = [h for h in model.last_turns if isinstance(h[-1], HumanMessage) and "tool round" in h[-1].content]
-    assert len(wrap_ups) == 3
+    assert len(wrap_ups) == 4
     for history in wrap_ups:
         assert any("returned]" in str(m.content) for m in history)
 

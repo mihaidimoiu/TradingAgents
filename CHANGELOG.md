@@ -17,6 +17,7 @@ Changes that need action when upgrading are listed under "Upgrading from" in the
 
 ### Added
 
+- **A macro analyst** (`"macro"`, `create_macro_analyst`). It reads FRED series and prediction markets and writes `macro_report`: the policy path, inflation, labour, growth, credit, the curve and real rates, the dollar, volatility and the trend, and which of them bear on the instrument and in which direction. The bull, the bear and the three risk voices weigh it beside the other reports, the report tree saves it as `1_analysts/macro.md`, and it runs by default. The news analyst keeps `get_news` and `get_global_news`: company and world news only.
 - `fallbacks` on `TradingAgentsGraph`: each (provider, model) can name stand-ins on other providers, asked in order when a call fails as `classify` reads it (by default only an empty account moves on). `on_fallback` hears each provider taken out of the run and each call moved on, `exhausted` shares who is out with the caller's other clients, and `ChainExhausted` names every provider's error once none answers.
 - `log_states` (default on): turn off the per-run state JSON under `results_dir` when the embedding app keeps its own record.
 - `report_missing(text)`: tells a failed analyst's note from a report, for a caller that stores reports.
@@ -25,6 +26,7 @@ Changes that need action when upgrading are listed under "Upgrading from" in the
 ### Upgrading from 0.7.1
 
 - A `tool_nodes` mapping should offer `calculate` beside an analyst's data tools: its prompt names it.
+- The news analyst no longer offers `get_macro_indicators` or `get_prediction_markets`; select `"macro"` for them, and give a `tool_nodes` mapping a `"macro"` node when it is selected. A run that names its analysts without `"macro"` has no macro report, and the debaters are told so.
 - The terminal UI's dependencies (typer, questionary, rich) moved to the `cli` extra: install `pip install ".[cli]"` for the `tradingagents` command. A library install no longer pulls them.
 
 ## [0.7.1] — 2026-10-27
