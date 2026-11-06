@@ -42,9 +42,10 @@ def _parse_json_list(value) -> list:
     if isinstance(value, list):
         return value
     try:
-        return json.loads(value)
+        parsed = json.loads(value)
     except (json.JSONDecodeError, TypeError):
         return []
+    return parsed if isinstance(parsed, list) else []
 
 
 def _is_forward_looking(market: dict, now: datetime) -> bool:
@@ -145,8 +146,12 @@ def get_prediction_markets(topic: str, limit: int | None = None, as_of_date: str
         prices = _parse_json_list(m.get("outcomePrices"))
         outcomes = _parse_json_list(m.get("outcomes"))
         try:
+            if isinstance(prices[0], bool):
+                continue
             prob = float(prices[0])
-        except (ValueError, IndexError):
+        except (TypeError, ValueError, IndexError):
+            continue
+        if not math.isfinite(prob) or not 0 <= prob <= 1:
             continue
         label = outcomes[0] if outcomes else "Yes"
         volume = m.get("volumeNum") or 0

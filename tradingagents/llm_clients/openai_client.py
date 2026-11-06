@@ -88,6 +88,29 @@ class LocalCompatibleChatOpenAI(NormalizedChatOpenAI):
         return super().with_structured_output(schema, method=method, **kwargs)
 
 
+class OpenRouterChatOpenAI(NormalizedChatOpenAI):
+    """OpenRouter, whose hosts accept a tool_choice the model's own API may refuse.
+
+    The capability table leaves tool_choice out for DeepSeek's thinking models,
+    whose own API rejects the named form. Left free to choose, the model often
+    answers the schema prompt in prose instead, so the structured call misses:
+    deepseek/deepseek-v4.1-flash did on every Trader call. Every OpenRouter host
+    for it accepts ``"required"``, which makes it call the schema tool without
+    the slow named form (#1199). Claude models that reject forced tool_choice on
+    OpenRouter (#1633) keep ``None``.
+    """
+
+    def with_structured_output(self, schema, *, method=None, **kwargs):
+        caps = get_capabilities(self.model_name)
+        if (
+            (method or caps.preferred_structured_method) == "function_calling"
+            and not caps.supports_tool_choice
+            and caps.requires_reasoning_content_roundtrip
+        ):
+            kwargs.setdefault("tool_choice", "required")
+        return super().with_structured_output(schema, method=method, **kwargs)
+
+
 def _input_to_messages(input_: Any) -> list:
     """Normalise a langchain LLM input to a list of message objects.
 
@@ -286,7 +309,7 @@ OPENAI_COMPATIBLE_PROVIDERS: dict[str, ProviderSpec] = {
     "glm-cn":     ProviderSpec(base_url="https://open.bigmodel.cn/api/paas/v4/"),
     "minimax":    ProviderSpec(base_url="https://api.minimax.io/v1", chat_class=MinimaxChatOpenAI),
     "minimax-cn": ProviderSpec(base_url="https://api.minimaxi.com/v1", chat_class=MinimaxChatOpenAI),
-    "openrouter": ProviderSpec(base_url="https://openrouter.ai/api/v1"),
+    "openrouter": ProviderSpec(base_url="https://openrouter.ai/api/v1", chat_class=OpenRouterChatOpenAI),
     "mistral":    ProviderSpec(base_url="https://api.mistral.ai/v1"),
     "kimi":       ProviderSpec(base_url="https://api.moonshot.ai/v1"),
     "groq":       ProviderSpec(base_url="https://api.groq.com/openai/v1"),
@@ -396,7 +419,7 @@ class OpenAIClient(BaseLLMClient):
                 llm_kwargs["api_key"] = api_key
             elif spec.key_optional:
                 llm_kwargs["api_key"] = spec.placeholder_key
-            elif api_key_env:
+            elif api_key_env and not self.kwargs.get("api_key"):
                 raise ValueError(
                     f"API key for provider '{self.provider}' is not set. "
                     f"Please set the {api_key_env} environment variable "

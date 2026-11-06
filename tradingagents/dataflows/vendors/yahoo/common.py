@@ -4,12 +4,16 @@ reported, and how a price is written out."""
 import logging
 import math
 import time
+import warnings
 
 import yfinance as yf
 from yfinance.exceptions import YFPricesMissingError, YFRateLimitError
 
 from tradingagents.dataflows.errors import NoMarketDataError, VendorUnavailableError
 from tradingagents.dataflows.net import vendor_reachable
+
+# yfinance turns its DeprecationWarnings back on at import; under pandas 3 every call floods the output.
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="^yfinance")
 
 logger = logging.getLogger(__name__)
 

@@ -66,6 +66,11 @@ def get_indicators(
             results.append(route_to_vendor("get_indicators", symbol, ind, curr_date, look_back_days))
         except ValueError as e:
             results.append(str(e))
+        except Exception as e:
+            # A terminal router failure (e.g. a transient network outage across all
+            # vendors) raises a non-ValueError. One failed indicator must not drop
+            # the rest of the batch or abort the analyst turn (#1593).
+            results.append(f"{ind}: {e}")
     return "\n\n".join(results)
 
 

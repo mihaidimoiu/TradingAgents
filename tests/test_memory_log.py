@@ -152,6 +152,24 @@ class TestTradingMemoryLogCore:
         assert len(entries) == 1
         assert entries[0]["pending"] is False  # the settled record is kept, not replaced
 
+    def test_a_rerun_with_a_rating_replaces_a_review_entry(self, tmp_path):
+        """REVIEW asks for a re-run, so the re-run's rating takes the entry's place,
+        pending again, rather than being dropped behind it. Once rated, a later
+        re-run is blocked as before."""
+        log = make_log(tmp_path)
+        log.store_decision("AAPL", "2026-01-11", DECISION_OVERWEIGHT)
+        log.store_decision("MSFT", "2026-01-12", DECISION_NO_RATING)
+        log.store_decision("NVDA", "2026-01-13", DECISION_BUY)
+        log.update_with_outcome("MSFT", "2026-01-12", 0.01, 0.0, 5, "unclear", "2026-01-20")
+
+        log.store_decision("MSFT", "2026-01-12", DECISION_BUY)
+        log.store_decision("MSFT", "2026-01-12", DECISION_SELL)
+
+        entries = log.load_entries()
+        assert [(e["ticker"], e["rating"], e["pending"]) for e in entries] == [
+            ("AAPL", "Overweight", True), ("MSFT", "Buy", True), ("NVDA", "Buy", True)]
+        assert entries[1]["reflection"] == ""
+
     def test_batch_update_resolves_multiple_entries(self, tmp_path):
         """batch_update_with_outcomes resolves multiple pending entries in one write."""
         log = make_log(tmp_path)
@@ -470,13 +488,13 @@ class TestDeferredReflection:
         assert msft["ticker"] == "MSFT" and msft["pending"] is True
 
     def test_update_atomic_write(self, tmp_path):
-        """A pre-existing .tmp file is overwritten; the log is correctly updated."""
+        """Settlement updates the log without consuming an unrelated .tmp file."""
         log = make_log(tmp_path)
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
         stale_tmp = tmp_path / "trading_memory.tmp"
-        stale_tmp.write_text("GARBAGE CONTENT — should be overwritten", encoding="utf-8")
+        stale_tmp.write_text("Existing neighboring file", encoding="utf-8")
         log.update_with_outcome("NVDA", "2026-01-10", 0.042, 0.021, 5, "Correct.")
-        assert not stale_tmp.exists()
+        assert stale_tmp.read_text(encoding="utf-8") == "Existing neighboring file"
         entries = log.load_entries()
         assert len(entries) == 1
         assert entries[0]["reflection"] == "Correct."
@@ -1155,6 +1173,19 @@ class TestSettlementWindow:
         raw, alpha, _, resolved = settlement.fetch_returns("NVDA", "2026-01-05", 5, "SPY")
 
         # Entered at the first real close after the decision: Wed 7, past the missing Tue 6.
+        assert raw == pytest.approx(106.0 / 101.0 - 1)
+        assert resolved == "2026-01-14"
+        assert alpha == pytest.approx(raw - (spy["2026-01-14"] / spy["2026-01-07"] - 1))
+
+    def test_an_infinite_close_is_skipped_not_scored(self, monkeypatch):
+        idx = pd.bdate_range("2026-01-05", periods=8)
+        stock = pd.Series([100.0, float("inf"), 101.0, 102.0, 103.0, 104.0, 105.0, 106.0], index=idx)
+        spy = pd.Series([400.0 + i for i in range(8)], index=idx)
+        monkeypatch.setattr(settlement, "get_closes", _closes({"NVDA": stock, "SPY": spy}))
+
+        raw, alpha, _, resolved = settlement.fetch_returns("NVDA", "2026-01-05", 5, "SPY")
+
+        # Entered Wed 7, after skipping the infinite close on Tue 6.
         assert raw == pytest.approx(106.0 / 101.0 - 1)
         assert resolved == "2026-01-14"
         assert alpha == pytest.approx(raw - (spy["2026-01-14"] / spy["2026-01-07"] - 1))

@@ -12,6 +12,13 @@ class ConditionalLogic:
         ``debate_gate``, when given, may end the investment debate after a
         complete round below the cap by returning True.
         """
+        # The first speaker of each debate always argues, so with 0 rounds one side
+        # speaks once and the others never do: a one-sided debate, not no debate.
+        if max_debate_rounds < 1 or max_risk_discuss_rounds < 1:
+            raise ValueError(
+                "max_debate_rounds and max_risk_discuss_rounds must be at least 1, got "
+                f"{max_debate_rounds} and {max_risk_discuss_rounds}"
+            )
         self.max_debate_rounds = max_debate_rounds
         self.max_risk_discuss_rounds = max_risk_discuss_rounds
         self.debate_gate = debate_gate
