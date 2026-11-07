@@ -64,7 +64,7 @@ def _statement(api_function: str, ticker: str, freq: str, as_of_date: str | None
     if period_column in frame.columns and not frame.empty:
         frame = frame[[period_column, *sorted(c for c in frame.columns if c != period_column)]]
         frame = frame.iloc[::-1]
-    return f"# {title} data for {canonical} ({freq})\n" + frame.to_csv(index=False)
+    return f"# {title} data for {canonical} ({freq})\n" + frame.to_csv(index=False, lineterminator="\n")
 
 
 def _reject_frequency(ticker: str, freq: str, title: str) -> str:
